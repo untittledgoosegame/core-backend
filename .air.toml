@@ -1,0 +1,18 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "CGO_ENABLED=0 go build -o ./tmp/server ./cmd/server"
+  entrypoint = "./tmp/server"
+  include_ext = ["go", "yaml", "env", "html"]
+  exclude_dir = ["tmp", "bin", "docker", ".git", ".omc"]
+  delay = 200
+  stop_on_error = true
+  send_interrupt = true
+  kill_delay = "2s"
+
+[log]
+  time = true
+
+[misc]
+  clean_on_exit = true
