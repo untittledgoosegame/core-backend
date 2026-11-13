@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"github.com/untittledgoosegame/core-backend/internal/provider"
 	"github.com/untittledgoosegame/core-backend/pkg/apperr"
 )
 
@@ -132,6 +133,11 @@ func (s *Store) UpdatePasskey(ctx context.Context, id bson.ObjectID, cred webaut
 	_, err := s.update(ctx,
 		byID(id, bson.E{Key: "passkeys.id", Value: cred.ID}),
 		set(bson.D{{Key: "passkeys.$", Value: cred}}))
+	return err
+}
+
+func (s *Store) SetConnectionFlag(ctx context.Context, id bson.ObjectID, p provider.Provider, connected bool) error {
+	_, err := s.update(ctx, byID(id), set(bson.D{{Key: "connections." + string(p), Value: connected}}))
 	return err
 }
 

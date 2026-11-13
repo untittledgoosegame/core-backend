@@ -6,6 +6,8 @@ import (
 
 	"github.com/go-webauthn/webauthn/webauthn"
 	"go.mongodb.org/mongo-driver/v2/bson"
+
+	"github.com/untittledgoosegame/core-backend/internal/provider"
 )
 
 type User struct {
@@ -17,8 +19,10 @@ type User struct {
 	Passkeys       []webauthn.Credential `bson:"passkeys,omitempty"`
 	TOTP           TOTP                  `bson:"totp"`
 	Profile        Profile               `bson:"profile"`
-	CreatedAt      time.Time             `bson:"created_at"`
-	UpdatedAt      time.Time             `bson:"updated_at"`
+	// Connections mirrors the connections collection's connected flags so profiles render without a join.
+	Connections map[provider.Provider]bool `bson:"connections,omitempty"`
+	CreatedAt   time.Time                  `bson:"created_at"`
+	UpdatedAt   time.Time                  `bson:"updated_at"`
 }
 
 // TOTP secrets are stored encrypted; see auth.Service.
@@ -61,14 +65,15 @@ type SignInMethods struct {
 }
 
 type View struct {
-	ID               string        `json:"id"`
-	Email            string        `json:"email,omitempty"`
-	Phone            string        `json:"phone,omitempty"`
-	Profile          Profile       `json:"profile"`
-	ProfileComplete  bool          `json:"profile_complete"`
-	TwoFactorEnabled bool          `json:"two_factor_enabled"`
-	SignInMethods    SignInMethods `json:"sign_in_methods"`
-	CreatedAt        time.Time     `json:"created_at"`
+	ID               string                     `json:"id"`
+	Email            string                     `json:"email,omitempty"`
+	Phone            string                     `json:"phone,omitempty"`
+	Profile          Profile                    `json:"profile"`
+	ProfileComplete  bool                       `json:"profile_complete"`
+	TwoFactorEnabled bool                       `json:"two_factor_enabled"`
+	SignInMethods    SignInMethods              `json:"sign_in_methods"`
+	Connections      map[provider.Provider]bool `json:"connections"`
+	CreatedAt        time.Time                  `json:"created_at"`
 }
 
 func PasskeyID(cred webauthn.Credential) string {
@@ -88,6 +93,7 @@ func (u *User) View() View {
 		ProfileComplete:  u.Profile.Complete(),
 		TwoFactorEnabled: u.TOTP.Enabled,
 		SignInMethods:    SignInMethods{Email: u.Email != "", Truecaller: u.TruecallerID != "", Passkeys: passkeys},
+		Connections:      provider.Flags(u.Connections),
 		CreatedAt:        u.CreatedAt,
 	}
 }

@@ -54,7 +54,7 @@ then built-in defaults. `.env.example` lists every option.
 | `SMTP_*` | Outgoing email |
 | `RATE_LIMIT_GLOBAL_PER_MINUTE`, `RATE_LIMIT_AUTH_PER_MINUTE` | Per-IP limits |
 | `MOBILE_ANDROID_*`, `MOBILE_IOS_APP_IDS` | Mobile passkey origins and well-known files |
-| `WEBHOOKS_OAUTH_SECRET` | HMAC secret shared with the OAuth service; empty disables the webhook |
+| `OAUTH_SERVICE_BASE_URL`, `OAUTH_SERVICE_SECRET` | OAuth service for third-party connections; the shared secret signs connect links, revoke calls and webhooks. Empty disables connections |
 
 `JWT_SECRET` and `SECURITY_ENCRYPTION_KEY` are required whenever `ENV` is not `dev`.
 
@@ -71,7 +71,8 @@ Full reference: [`docs/openapi.json`](docs/openapi.json).
 | `POST` | `/v1/auth/2fa/setup`, `/enable`, `/disable` | Bearer |
 | `GET` | `/v1/users/me` | Bearer |
 | `PUT` | `/v1/users/me/profile` | Bearer |
-| `GET` | `/v1/users/me/connections` | Bearer |
+| `GET` | `/v1/users/me/connections`, `/v1/users/me/connections/{provider}` | Bearer |
+| `POST` / `DELETE` | `/v1/users/me/connections/{provider}` | Bearer |
 | `GET` | `/v1/usernames/suggestions`, `/v1/usernames/availability` | Bearer |
 | `POST` | `/v1/webhooks/oauth` | HMAC signature |
 | `GET` | `/.well-known/assetlinks.json`, `/.well-known/apple-app-site-association` | – |
@@ -86,16 +87,30 @@ Auth routes have a stricter rate limit than the rest; the webhook is exempt.
 
 Signed-in users can attach or remove extra sign-in methods with `POST` / `DELETE /v1/auth/link`.
 
-### Connections webhook
+### Connections
 
-The OAuth service owns provider tokens and pushes profile changes to `POST /v1/webhooks/oauth`.
+A separate OAuth service owns provider tokens. Providers: YouTube, Roblox, Instagram, X, Spotify, GitHub, Riot Games,
+LinkedIn, Reddit, PlayStation, custom domain, Crunchyroll, Amazon Prime, Xbox, PayPal, Steam, Epic Games.
 
-- Header: `X-Webhook-Signature: t=<unix>,v1=<hex HMAC-SHA256(WEBHOOKS_OAUTH_SECRET, "<t>.<raw body>")>`
-- Events: `connection.connected`, `connection.updated`, `connection.disconnected`
-- Providers: YouTube, Roblox, Instagram, X, Spotify, GitHub, Riot Games, LinkedIn, Reddit, PlayStation,
-  custom domain, Crunchyroll, Amazon Prime, Xbox, PayPal, Steam, Epic Games
+Every user response includes `connections`, a `provider → true/false` map of all 17 providers.
 
-`GET /v1/users/me/connections` returns every provider with `connected: true/false`.
+| Action | Call | What happens |
+|---|---|---|
+| List | `GET /v1/users/me/connections` | Every provider with `connected` and, if connected, the account profile |
+| View one | `GET /v1/users/me/connections/{provider}` | Same, for one provider |
+| Connect | `POST /v1/users/me/connections/{provider}` | Returns a `connect_url` to open; the OAuth service finishes and sends a webhook |
+| Disconnect | `DELETE /v1/users/me/connections/{provider}` | Asks the OAuth service to revoke tokens, then clears the account here |
+
+Contract with the OAuth service (all signed with `OAUTH_SERVICE_SECRET`):
+
+- **Connect link:** `{OAUTH_SERVICE_BASE_URL}/v1/connect/{provider}?token=<JWT>`. HS256, `iss=core-backend`,
+  `aud=oauth-service`, `sub=<user id>`, `provider`, 10-minute expiry. Echo `sub` back as `user_id` in webhooks.
+- **Revoke:** this service calls `POST {OAUTH_SERVICE_BASE_URL}/v1/connections/revoke` with
+  `{"user_id","provider","requested_at"}` and an `X-Webhook-Signature` header. Reply 2xx (or 404 if nothing is held).
+  Any other reply aborts the disconnect with 502 so nothing is cleared half-way.
+- **Webhook:** `POST /v1/webhooks/oauth` with events `connection.connected`, `connection.updated`,
+  `connection.disconnected`, signed as `X-Webhook-Signature: t=<unix>,v1=<hex HMAC-SHA256(secret, "<t>.<raw body>")>`.
+  Events are deduplicated by `id` and ordered by `occurred_at`.
 
 ### Mobile passkeys
 
@@ -113,7 +128,8 @@ internal/
   api/middleware/    JWT auth, client IP, rate limits, request logs
   auth/              sign-in flows, JWT, email codes, passkeys, Truecaller, 2FA, linking
   user/              user model, Mongo store, username and profile rules
-  connection/        third-party connections from the OAuth webhook
+  provider/          the 17 connection providers
+  connection/        third-party connections: service, OAuth service client, webhook events
   server/            HTTP server and graceful shutdown
 pkg/                 app-agnostic helpers: config, logger, database, cache,
                      mailer, apperr, httpx, secret, webhook

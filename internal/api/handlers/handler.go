@@ -14,7 +14,7 @@ type Deps struct {
 	DB          *mongo.Database
 	Redis       *redis.Client
 	Users       *user.Store
-	Connections *connection.Store
+	Connections *connection.Service
 	Auth        *auth.Service
 	Config      config.Config
 }
@@ -23,10 +23,9 @@ type Handler struct {
 	db          *mongo.Database
 	redis       *redis.Client
 	users       *user.Store
-	connections *connection.Store
+	connections *connection.Service
 	auth        *auth.Service
 	mobile      config.MobileConfig
-	webhooks    config.WebhooksConfig
 }
 
 func New(d Deps) *Handler {
@@ -37,6 +36,5 @@ func New(d Deps) *Handler {
 		connections: d.Connections,
 		auth:        d.Auth,
 		mobile:      d.Config.Mobile,
-		webhooks:    d.Config.Webhooks,
 	}
 }

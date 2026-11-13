@@ -2,8 +2,10 @@ package connection
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/untittledgoosegame/core-backend/internal/provider"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -74,6 +76,18 @@ func (s *Store) Apply(ctx context.Context, userID bson.ObjectID, e Event) (bool,
 	return err == nil, err
 }
 
+func (s *Store) Get(ctx context.Context, userID bson.ObjectID, p provider.Provider) (*Connection, error) {
+	var c Connection
+	err := s.connections.FindOne(ctx, bson.D{{Key: "user_id", Value: userID}, {Key: "provider", Value: p}}).Decode(&c)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
 // ListForUser returns every provider in display order, connected or not.
 func (s *Store) ListForUser(ctx context.Context, userID bson.ObjectID) ([]View, error) {
 	cur, err := s.connections.Find(ctx, bson.D{{Key: "user_id", Value: userID}})
@@ -84,20 +98,19 @@ func (s *Store) ListForUser(ctx context.Context, userID bson.ObjectID) ([]View, 
 	if err := cur.All(ctx, &stored); err != nil {
 		return nil, err
 	}
-	byProvider := make(map[Provider]Connection, len(stored))
+	byProvider := make(map[provider.Provider]Connection, len(stored))
 	for _, c := range stored {
 		byProvider[c.Provider] = c
 	}
 
-	views := make([]View, 0, len(Providers))
-	for _, p := range Providers {
+	views := make([]View, 0, len(provider.All))
+	for _, p := range provider.All {
 		c, ok := byProvider[p]
 		if !ok {
 			views = append(views, View{Provider: p})
 			continue
 		}
-		updated := c.UpdatedAt
-		views = append(views, View{Provider: p, Connected: c.Connected, Account: c.Account, ConnectedAt: c.ConnectedAt, UpdatedAt: &updated})
+		views = append(views, c.View())
 	}
 	return views, nil
 }
