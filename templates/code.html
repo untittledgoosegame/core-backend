@@ -1,0 +1,18 @@
+{{define "code.html"}}{{template "layout" .}}{{end}}
+{{define "content"}}
+          <tr>
+            <td style="font-size:16px;line-height:24px;color:#3f3f46;padding-bottom:24px;">
+              {{.Intro}} It expires in {{.ExpiresInMinutes}} minutes.
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="background:#f4f4f5;border-radius:12px;padding:20px;font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:32px;font-weight:600;letter-spacing:8px;color:#0a0a0a;">
+              {{.Code}}
+            </td>
+          </tr>
+          <tr>
+            <td style="font-size:13px;line-height:20px;color:#71717a;padding-top:24px;">
+              If you didn't request this code, you can safely ignore this email. Never share it with anyone.
+            </td>
+          </tr>
+{{end}}

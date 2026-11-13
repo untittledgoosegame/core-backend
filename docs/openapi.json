@@ -1,0 +1,3363 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Core Backend API",
+    "version": "0.5.0",
+    "description": "Sign-in flow: **register or login** (email code, passkey or Truecaller) → optional **2FA** → **profile setup**.\n\n- All bodies are JSON; unknown fields are rejected (400).\n- Errors are `{\"error\": \"message\"}` with a matching HTTP status.\n- Authenticated routes need `Authorization: Bearer <token>` from a `Session`.\n- `POST /v1/webhooks/oauth` is server-to-server, HMAC-signed and not rate limited.\n- Rate limits per client IP: 120 requests/minute overall, 10/minute on register, login, 2FA verify/enable/disable and link. Exceeding them returns 429.\n\n### Email codes\n- 6 digits, valid for **10 minutes**, usable **once**.\n- A new code can be requested after **1 minute** (429 before that). Requesting one replaces the previous code.\n- **5 wrong attempts** delete the code; request a new one.\n- Codes for register, login and link are separate: a login code can't complete a registration."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Local"
+    }
+  ],
+  "tags": [
+    {
+      "name": "system",
+      "description": "Health"
+    },
+    {
+      "name": "auth",
+      "description": "Register, log in, link and unlink sign-in methods"
+    },
+    {
+      "name": "2fa",
+      "description": "Authenticator-app two-factor"
+    },
+    {
+      "name": "profile",
+      "description": "Profile setup and usernames"
+    },
+    {
+      "name": "well-known",
+      "description": "Files mobile apps need for passkeys"
+    },
+    {
+      "name": "connections",
+      "description": "Third-party accounts linked through the OAuth service"
+    },
+    {
+      "name": "webhooks",
+      "description": "Server-to-server events from the OAuth service"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Health check",
+        "operationId": "getHealth",
+        "security": [],
+        "description": "Checks MongoDB and Redis.",
+        "responses": {
+          "200": {
+            "description": "Server, MongoDB and Redis are healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                },
+                "examples": {
+                  "ok": {
+                    "summary": "ok",
+                    "value": {
+                      "status": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A dependency is unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                },
+                "examples": {
+                  "mongo": {
+                    "summary": "mongo",
+                    "value": {
+                      "status": "mongo unavailable"
+                    }
+                  },
+                  "redis": {
+                    "summary": "redis",
+                    "value": {
+                      "status": "redis unavailable"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/register": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Create an account",
+        "operationId": "register",
+        "security": [],
+        "description": "Send the same endpoint twice for email and passkey:\n\n| method | step 1 body | step 1 result | step 2 body | step 2 result |\n|---|---|---|---|---|\n| `email` | `{method, email}` | `CodeSent` | `{method, email, code}` | `Session` |\n| `passkey` | `{method}` | `PasskeyChallenge` (pass `options` to `navigator.credentials.create`) | `{method, challenge_id, credential}` | `Session` |\n| `truecaller` | `{method, authorization_code, code_verifier}` | `Session` | | |\n\nPasskey challenges expire after 5 minutes and work once.\n\n### Email codes\n- 6 digits, valid for **10 minutes**, usable **once**.\n- A new code can be requested after **1 minute** (429 before that). Requesting one replaces the previous code.\n- **5 wrong attempts** delete the code; request a new one.\n- Codes for register, login and link are separate: a login code can't complete a registration.\n\nNew accounts never have 2FA, so registration always ends in a `Session`. `user.profile_complete` is false until the profile is set.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRequest"
+              },
+              "examples": {
+                "email_step_1": {
+                  "summary": "email step 1",
+                  "value": {
+                    "method": "email",
+                    "email": "goose@example.com"
+                  }
+                },
+                "email_step_2": {
+                  "summary": "email step 2",
+                  "value": {
+                    "method": "email",
+                    "email": "goose@example.com",
+                    "code": "123456"
+                  }
+                },
+                "passkey_step_1": {
+                  "summary": "passkey step 1",
+                  "value": {
+                    "method": "passkey"
+                  }
+                },
+                "passkey_step_2": {
+                  "summary": "passkey step 2",
+                  "value": {
+                    "method": "passkey",
+                    "challenge_id": "9e26027dc30b…",
+                    "credential": {
+                      "id": "…",
+                      "rawId": "…",
+                      "type": "public-key",
+                      "response": {}
+                    }
+                  }
+                },
+                "truecaller": {
+                  "summary": "truecaller",
+                  "value": {
+                    "method": "truecaller",
+                    "authorization_code": "…",
+                    "code_verifier": "…"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Next step, or a session for the new account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResult"
+                },
+                "examples": {
+                  "code_sent": {
+                    "summary": "code sent",
+                    "value": {
+                      "status": "code_sent"
+                    }
+                  },
+                  "passkey_challenge": {
+                    "summary": "passkey challenge",
+                    "value": {
+                      "challenge_id": "9e26027dc30b703d134d580706250f090cebdf1392b6599931683103fb546354",
+                      "options": {
+                        "publicKey": {
+                          "challenge": "l8k7Ch78Nu-GQgD79AT19gEFGrV4eLJg4-NC6Qyq5hc",
+                          "timeout": 300000,
+                          "rpId": "localhost"
+                        }
+                      }
+                    }
+                  },
+                  "session": {
+                    "summary": "session",
+                    "value": {
+                      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                      "expires_at": "2026-12-14T00:53:28Z",
+                      "user": {
+                        "id": "6af763b09c606f1eb93dcedc",
+                        "email": "goose@example.com",
+                        "profile": {
+                          "name": "",
+                          "username": "",
+                          "dob": ""
+                        },
+                        "profile_complete": false,
+                        "two_factor_enabled": false,
+                        "sign_in_methods": {
+                          "email": true,
+                          "truecaller": false,
+                          "passkeys": []
+                        },
+                        "created_at": "2026-11-13T19:23:28.942Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "a valid email is required",
+                    "value": {
+                      "error": "a valid email is required"
+                    }
+                  },
+                  "e1": {
+                    "summary": "method must be one of: email, passkey, truecaller",
+                    "value": {
+                      "error": "method must be one of: email, passkey, truecaller"
+                    }
+                  },
+                  "e2": {
+                    "summary": "challenge_id is required with a credential",
+                    "value": {
+                      "error": "challenge_id is required with a credential"
+                    }
+                  },
+                  "e3": {
+                    "summary": "invalid passkey credential",
+                    "value": {
+                      "error": "invalid passkey credential"
+                    }
+                  },
+                  "e4": {
+                    "summary": "authorization_code and code_verifier are required",
+                    "value": {
+                      "error": "authorization_code and code_verifier are required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wrong or expired code, challenge or credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "invalid code",
+                    "value": {
+                      "error": "invalid code"
+                    }
+                  },
+                  "e1": {
+                    "summary": "code expired or too many attempts, request a new one",
+                    "value": {
+                      "error": "code expired or too many attempts, request a new one"
+                    }
+                  },
+                  "e2": {
+                    "summary": "challenge expired, start again",
+                    "value": {
+                      "error": "challenge expired, start again"
+                    }
+                  },
+                  "e3": {
+                    "summary": "passkey verification failed",
+                    "value": {
+                      "error": "passkey verification failed"
+                    }
+                  },
+                  "e4": {
+                    "summary": "truecaller rejected the authorization code",
+                    "value": {
+                      "error": "truecaller rejected the authorization code"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Account already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "account already exists, log in instead",
+                    "value": {
+                      "error": "account already exists, log in instead"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Code requested within the last minute, or rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "wait a minute before requesting another code",
+                    "value": {
+                      "error": "wait a minute before requesting another code"
+                    }
+                  },
+                  "e1": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Email or Truecaller unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "could not send the email, try again",
+                    "value": {
+                      "error": "could not send the email, try again"
+                    }
+                  },
+                  "e1": {
+                    "summary": "email is not configured",
+                    "value": {
+                      "error": "email is not configured"
+                    }
+                  },
+                  "e2": {
+                    "summary": "truecaller sign-in is not configured",
+                    "value": {
+                      "error": "truecaller sign-in is not configured"
+                    }
+                  },
+                  "e3": {
+                    "summary": "truecaller is unreachable",
+                    "value": {
+                      "error": "truecaller is unreachable"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Log in to an existing account",
+        "operationId": "login",
+        "security": [],
+        "description": "Send the same endpoint twice for email and passkey:\n\n| method | step 1 body | step 1 result | step 2 body | step 2 result |\n|---|---|---|---|---|\n| `email` | `{method, email}` | `CodeSent` | `{method, email, code}` | `Session` or `MFAChallenge` |\n| `passkey` | `{method}` | `PasskeyChallenge` (pass `options` to `navigator.credentials.get`) | `{method, challenge_id, credential}` | `Session` |\n| `truecaller` | `{method, authorization_code, code_verifier}` | `Session` or `MFAChallenge` | | |\n\nPasskey challenges expire after 5 minutes and work once.\n\n### Email codes\n- 6 digits, valid for **10 minutes**, usable **once**.\n- A new code can be requested after **1 minute** (429 before that). Requesting one replaces the previous code.\n- **5 wrong attempts** delete the code; request a new one.\n- Codes for register, login and link are separate: a login code can't complete a registration.\n\n### Two-factor\nIf the account has 2FA on, email and Truecaller logins return `MFAChallenge`; finish with `POST /v1/auth/2fa/verify`. Passkey logins skip 2FA (a passkey is already two factors).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRequest"
+              },
+              "examples": {
+                "email_step_1": {
+                  "summary": "email step 1",
+                  "value": {
+                    "method": "email",
+                    "email": "goose@example.com"
+                  }
+                },
+                "email_step_2": {
+                  "summary": "email step 2",
+                  "value": {
+                    "method": "email",
+                    "email": "goose@example.com",
+                    "code": "123456"
+                  }
+                },
+                "passkey_step_1": {
+                  "summary": "passkey step 1",
+                  "value": {
+                    "method": "passkey"
+                  }
+                },
+                "passkey_step_2": {
+                  "summary": "passkey step 2",
+                  "value": {
+                    "method": "passkey",
+                    "challenge_id": "9e26027dc30b…",
+                    "credential": {
+                      "id": "…",
+                      "rawId": "…",
+                      "type": "public-key",
+                      "response": {}
+                    }
+                  }
+                },
+                "truecaller": {
+                  "summary": "truecaller",
+                  "value": {
+                    "method": "truecaller",
+                    "authorization_code": "…",
+                    "code_verifier": "…"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Next step, 2FA challenge, or a session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResult"
+                },
+                "examples": {
+                  "code_sent": {
+                    "summary": "code sent",
+                    "value": {
+                      "status": "code_sent"
+                    }
+                  },
+                  "passkey_challenge": {
+                    "summary": "passkey challenge",
+                    "value": {
+                      "challenge_id": "9e26027dc30b703d134d580706250f090cebdf1392b6599931683103fb546354",
+                      "options": {
+                        "publicKey": {
+                          "challenge": "l8k7Ch78Nu-GQgD79AT19gEFGrV4eLJg4-NC6Qyq5hc",
+                          "timeout": 300000,
+                          "rpId": "localhost"
+                        }
+                      }
+                    }
+                  },
+                  "mfa_challenge": {
+                    "summary": "mfa challenge",
+                    "value": {
+                      "mfa_required": true,
+                      "mfa_token": "7a355093fdc6a549…"
+                    }
+                  },
+                  "session": {
+                    "summary": "session",
+                    "value": {
+                      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                      "expires_at": "2026-12-14T00:53:28Z",
+                      "user": {
+                        "id": "6af763b09c606f1eb93dcedc",
+                        "email": "goose@example.com",
+                        "profile": {
+                          "name": "",
+                          "username": "",
+                          "dob": ""
+                        },
+                        "profile_complete": false,
+                        "two_factor_enabled": false,
+                        "sign_in_methods": {
+                          "email": true,
+                          "truecaller": false,
+                          "passkeys": []
+                        },
+                        "created_at": "2026-11-13T19:23:28.942Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "a valid email is required",
+                    "value": {
+                      "error": "a valid email is required"
+                    }
+                  },
+                  "e1": {
+                    "summary": "method must be one of: email, passkey, truecaller",
+                    "value": {
+                      "error": "method must be one of: email, passkey, truecaller"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wrong or expired code, challenge or credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "invalid code",
+                    "value": {
+                      "error": "invalid code"
+                    }
+                  },
+                  "e1": {
+                    "summary": "code expired or too many attempts, request a new one",
+                    "value": {
+                      "error": "code expired or too many attempts, request a new one"
+                    }
+                  },
+                  "e2": {
+                    "summary": "challenge expired, start again",
+                    "value": {
+                      "error": "challenge expired, start again"
+                    }
+                  },
+                  "e3": {
+                    "summary": "passkey verification failed",
+                    "value": {
+                      "error": "passkey verification failed"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No account for this sign-in method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "no account for this email, register instead",
+                    "value": {
+                      "error": "no account for this email, register instead"
+                    }
+                  },
+                  "e1": {
+                    "summary": "no account for this truecaller profile, register instead",
+                    "value": {
+                      "error": "no account for this truecaller profile, register instead"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Code requested within the last minute, or rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "wait a minute before requesting another code",
+                    "value": {
+                      "error": "wait a minute before requesting another code"
+                    }
+                  },
+                  "e1": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Email or Truecaller unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "could not send the email, try again",
+                    "value": {
+                      "error": "could not send the email, try again"
+                    }
+                  },
+                  "e1": {
+                    "summary": "truecaller sign-in is not configured",
+                    "value": {
+                      "error": "truecaller sign-in is not configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/2fa/verify": {
+      "post": {
+        "tags": [
+          "2fa"
+        ],
+        "summary": "Finish login with an authenticator code",
+        "operationId": "verifyTwoFactor",
+        "security": [],
+        "description": "Second step of a login that returned `MFAChallenge`. Each `mfa_token` is valid for 5 minutes, allows 5 attempts and works once.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "mfa_token",
+                  "code"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "mfa_token": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[0-9]{6}$"
+                  }
+                }
+              },
+              "examples": {
+                "verify": {
+                  "summary": "verify",
+                  "value": {
+                    "mfa_token": "7a355093fdc6a549…",
+                    "code": "123456"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Session"
+                },
+                "examples": {
+                  "session": {
+                    "summary": "session",
+                    "value": {
+                      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                      "expires_at": "2026-12-14T00:53:28Z",
+                      "user": {
+                        "id": "6af763b09c606f1eb93dcedc",
+                        "email": "goose@example.com",
+                        "profile": {
+                          "name": "",
+                          "username": "",
+                          "dob": ""
+                        },
+                        "profile_complete": false,
+                        "two_factor_enabled": false,
+                        "sign_in_methods": {
+                          "email": true,
+                          "truecaller": false,
+                          "passkeys": []
+                        },
+                        "created_at": "2026-11-13T19:23:28.942Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "mfa_token and code are required",
+                    "value": {
+                      "error": "mfa_token and code are required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wrong code, or token expired / used / out of attempts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "invalid code",
+                    "value": {
+                      "error": "invalid code"
+                    }
+                  },
+                  "e1": {
+                    "summary": "challenge expired or too many attempts, log in again",
+                    "value": {
+                      "error": "challenge expired or too many attempts, log in again"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/2fa/setup": {
+      "post": {
+        "tags": [
+          "2fa"
+        ],
+        "summary": "Start enabling 2FA",
+        "operationId": "setupTwoFactor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Creates a new authenticator secret (stored encrypted). Show `otpauth_url` as a QR code or `secret` for manual entry, then confirm with `/v1/auth/2fa/enable`. Calling it again replaces the pending secret.",
+        "responses": {
+          "200": {
+            "description": "Secret to add to an authenticator app",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TOTPSetup"
+                },
+                "examples": {
+                  "setup": {
+                    "summary": "setup",
+                    "value": {
+                      "secret": "7LBJ7JONAAA3ZK6DQBAPLTX2KLPMV36H",
+                      "otpauth_url": "otpauth://totp/Goose:zoeann?algorithm=SHA1&digits=6&issuer=Goose&period=30&secret=7LBJ7JONAAA3ZK6DQBAPLTX2KLPMV36H"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "2FA already enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "two-factor authentication is already enabled",
+                    "value": {
+                      "error": "two-factor authentication is already enabled"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/2fa/enable": {
+      "post": {
+        "tags": [
+          "2fa"
+        ],
+        "summary": "Confirm and enable 2FA",
+        "operationId": "enableTwoFactor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Send a current code from the authenticator app. A security alert is emailed to the account.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeRequest"
+              },
+              "examples": {
+                "enable": {
+                  "summary": "enable",
+                  "value": {
+                    "code": "123456"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "examples": {
+                  "user": {
+                    "summary": "user",
+                    "value": {
+                      "id": "6af763b09c606f1eb93dcedc",
+                      "email": "goose@example.com",
+                      "profile": {
+                        "name": "Zoë Ann",
+                        "username": "zoeann",
+                        "dob": "2000-01-31",
+                        "bio": "honk"
+                      },
+                      "profile_complete": true,
+                      "two_factor_enabled": true,
+                      "sign_in_methods": {
+                        "email": true,
+                        "truecaller": false,
+                        "passkeys": [
+                          "cGFzc2tleS0x"
+                        ]
+                      },
+                      "created_at": "2026-11-13T19:23:28.942Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Setup not started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "start setup first",
+                    "value": {
+                      "error": "start setup first"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wrong code or bad token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "invalid code",
+                    "value": {
+                      "error": "invalid code"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "two-factor authentication is already enabled",
+                    "value": {
+                      "error": "two-factor authentication is already enabled"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/2fa/disable": {
+      "post": {
+        "tags": [
+          "2fa"
+        ],
+        "summary": "Disable 2FA",
+        "operationId": "disableTwoFactor",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires a current authenticator code. A security alert is emailed to the account.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeRequest"
+              },
+              "examples": {
+                "disable": {
+                  "summary": "disable",
+                  "value": {
+                    "code": "123456"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "examples": {
+                  "user": {
+                    "summary": "user",
+                    "value": {
+                      "id": "6af763b09c606f1eb93dcedc",
+                      "email": "goose@example.com",
+                      "profile": {
+                        "name": "Zoë Ann",
+                        "username": "zoeann",
+                        "dob": "2000-01-31",
+                        "bio": "honk"
+                      },
+                      "profile_complete": true,
+                      "two_factor_enabled": false,
+                      "sign_in_methods": {
+                        "email": true,
+                        "truecaller": false,
+                        "passkeys": [
+                          "cGFzc2tleS0x"
+                        ]
+                      },
+                      "created_at": "2026-11-13T19:23:28.942Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "2FA not enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "two-factor authentication is not enabled",
+                    "value": {
+                      "error": "two-factor authentication is not enabled"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wrong code or bad token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "invalid code",
+                    "value": {
+                      "error": "invalid code"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/link": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Link another sign-in method",
+        "operationId": "linkMethod",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Send the same endpoint twice for email and passkey:\n\n| method | step 1 body | step 1 result | step 2 body | step 2 result |\n|---|---|---|---|---|\n| `email` | `{method, email}` | `CodeSent` | `{method, email, code}` | `Linked` |\n| `passkey` | `{method}` | `PasskeyChallenge` (pass `options` to `navigator.credentials.create`) | `{method, challenge_id, credential}` | `Linked` |\n| `truecaller` | `{method, authorization_code, code_verifier}` | `Linked` | | |\n\nPasskey challenges expire after 5 minutes and work once.\n\n### Email codes\n- 6 digits, valid for **10 minutes**, usable **once**.\n- A new code can be requested after **1 minute** (429 before that). Requesting one replaces the previous code.\n- **5 wrong attempts** delete the code; request a new one.\n- Codes for register, login and link are separate: a login code can't complete a registration.\n\nAn account can have one email, one Truecaller profile and any number of passkeys. A security alert is emailed when a method is added.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRequest"
+              },
+              "examples": {
+                "email_step_1": {
+                  "summary": "email step 1",
+                  "value": {
+                    "method": "email",
+                    "email": "goose@example.com"
+                  }
+                },
+                "email_step_2": {
+                  "summary": "email step 2",
+                  "value": {
+                    "method": "email",
+                    "email": "goose@example.com",
+                    "code": "123456"
+                  }
+                },
+                "passkey_step_1": {
+                  "summary": "passkey step 1",
+                  "value": {
+                    "method": "passkey"
+                  }
+                },
+                "passkey_step_2": {
+                  "summary": "passkey step 2",
+                  "value": {
+                    "method": "passkey",
+                    "challenge_id": "9e26027dc30b…",
+                    "credential": {
+                      "id": "…",
+                      "rawId": "…",
+                      "type": "public-key",
+                      "response": {}
+                    }
+                  }
+                },
+                "truecaller": {
+                  "summary": "truecaller",
+                  "value": {
+                    "method": "truecaller",
+                    "authorization_code": "…",
+                    "code_verifier": "…"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Next step, or the updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResult"
+                },
+                "examples": {
+                  "code_sent": {
+                    "summary": "code sent",
+                    "value": {
+                      "status": "code_sent"
+                    }
+                  },
+                  "passkey_challenge": {
+                    "summary": "passkey challenge",
+                    "value": {
+                      "challenge_id": "9e26027dc30b703d134d580706250f090cebdf1392b6599931683103fb546354",
+                      "options": {
+                        "publicKey": {
+                          "challenge": "l8k7Ch78Nu-GQgD79AT19gEFGrV4eLJg4-NC6Qyq5hc",
+                          "timeout": 300000,
+                          "rpId": "localhost"
+                        }
+                      }
+                    }
+                  },
+                  "linked": {
+                    "summary": "linked",
+                    "value": {
+                      "user": {
+                        "id": "6af763b09c606f1eb93dcedc",
+                        "email": "goose@example.com",
+                        "profile": {
+                          "name": "Zoë Ann",
+                          "username": "zoeann",
+                          "dob": "2000-01-31",
+                          "bio": "honk"
+                        },
+                        "profile_complete": true,
+                        "two_factor_enabled": false,
+                        "sign_in_methods": {
+                          "email": true,
+                          "truecaller": false,
+                          "passkeys": [
+                            "cGFzc2tleS0x"
+                          ]
+                        },
+                        "created_at": "2026-11-13T19:23:28.942Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "a valid email is required",
+                    "value": {
+                      "error": "a valid email is required"
+                    }
+                  },
+                  "e1": {
+                    "summary": "method must be one of: email, passkey, truecaller",
+                    "value": {
+                      "error": "method must be one of: email, passkey, truecaller"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wrong code, credential or token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "invalid code",
+                    "value": {
+                      "error": "invalid code"
+                    }
+                  },
+                  "e1": {
+                    "summary": "code expired or too many attempts, request a new one",
+                    "value": {
+                      "error": "code expired or too many attempts, request a new one"
+                    }
+                  },
+                  "e2": {
+                    "summary": "challenge expired, start again",
+                    "value": {
+                      "error": "challenge expired, start again"
+                    }
+                  },
+                  "e3": {
+                    "summary": "passkey verification failed",
+                    "value": {
+                      "error": "passkey verification failed"
+                    }
+                  },
+                  "e4": {
+                    "summary": "challenge belongs to another account",
+                    "value": {
+                      "error": "challenge belongs to another account"
+                    }
+                  },
+                  "e5": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already linked, or belongs to another account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "an email is already linked; unlink it first",
+                    "value": {
+                      "error": "an email is already linked; unlink it first"
+                    }
+                  },
+                  "e1": {
+                    "summary": "this email belongs to another account",
+                    "value": {
+                      "error": "this email belongs to another account"
+                    }
+                  },
+                  "e2": {
+                    "summary": "a truecaller profile is already linked; unlink it first",
+                    "value": {
+                      "error": "a truecaller profile is already linked; unlink it first"
+                    }
+                  },
+                  "e3": {
+                    "summary": "this truecaller profile belongs to another account",
+                    "value": {
+                      "error": "this truecaller profile belongs to another account"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Code requested within the last minute, or rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "wait a minute before requesting another code",
+                    "value": {
+                      "error": "wait a minute before requesting another code"
+                    }
+                  },
+                  "e1": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Email or Truecaller unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "could not send the email, try again",
+                    "value": {
+                      "error": "could not send the email, try again"
+                    }
+                  },
+                  "e1": {
+                    "summary": "truecaller sign-in is not configured",
+                    "value": {
+                      "error": "truecaller sign-in is not configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Unlink a sign-in method",
+        "operationId": "unlinkMethod",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Removes a sign-in method. The last remaining method can't be removed. A security alert is emailed to the account's email (if it had one before the change).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnlinkRequest"
+              },
+              "examples": {
+                "email": {
+                  "summary": "email",
+                  "value": {
+                    "method": "email"
+                  }
+                },
+                "passkey": {
+                  "summary": "passkey",
+                  "value": {
+                    "method": "passkey",
+                    "credential_id": "cGFzc2tleS0x"
+                  }
+                },
+                "truecaller": {
+                  "summary": "truecaller",
+                  "value": {
+                    "method": "truecaller"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "examples": {
+                  "user": {
+                    "summary": "user",
+                    "value": {
+                      "id": "6af763b09c606f1eb93dcedc",
+                      "email": "goose@example.com",
+                      "profile": {
+                        "name": "Zoë Ann",
+                        "username": "zoeann",
+                        "dob": "2000-01-31",
+                        "bio": "honk"
+                      },
+                      "profile_complete": true,
+                      "two_factor_enabled": false,
+                      "sign_in_methods": {
+                        "email": true,
+                        "truecaller": false,
+                        "passkeys": [
+                          "cGFzc2tleS0x"
+                        ]
+                      },
+                      "created_at": "2026-11-13T19:23:28.942Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "credential_id must be a base64url passkey id",
+                    "value": {
+                      "error": "credential_id must be a base64url passkey id"
+                    }
+                  },
+                  "e1": {
+                    "summary": "method must be one of: email, passkey, truecaller",
+                    "value": {
+                      "error": "method must be one of: email, passkey, truecaller"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Method not linked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "that sign-in method isn't linked to your account",
+                    "value": {
+                      "error": "that sign-in method isn't linked to your account"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Only sign-in method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "you can't remove your only sign-in method",
+                    "value": {
+                      "error": "you can't remove your only sign-in method"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Current user",
+        "operationId": "getMe",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "examples": {
+                  "user": {
+                    "summary": "user",
+                    "value": {
+                      "id": "6af763b09c606f1eb93dcedc",
+                      "email": "goose@example.com",
+                      "profile": {
+                        "name": "Zoë Ann",
+                        "username": "zoeann",
+                        "dob": "2000-01-31",
+                        "bio": "honk"
+                      },
+                      "profile_complete": true,
+                      "two_factor_enabled": false,
+                      "sign_in_methods": {
+                        "email": true,
+                        "truecaller": false,
+                        "passkeys": [
+                          "cGFzc2tleS0x"
+                        ]
+                      },
+                      "created_at": "2026-11-13T19:23:28.942Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Account deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "account not found",
+                    "value": {
+                      "error": "account not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/profile": {
+      "put": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Set profile",
+        "operationId": "updateProfile",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Replaces the whole profile. `name`, `username` and `dob` are required; `avatar_url` and `bio` are optional. Users must be at least 13. Username is lowercased before saving.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileInput"
+              },
+              "examples": {
+                "profile": {
+                  "summary": "profile",
+                  "value": {
+                    "name": "Zoë Ann",
+                    "username": "zoeann",
+                    "dob": "2000-01-31",
+                    "bio": "honk"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "examples": {
+                  "user": {
+                    "summary": "user",
+                    "value": {
+                      "id": "6af763b09c606f1eb93dcedc",
+                      "email": "goose@example.com",
+                      "profile": {
+                        "name": "Zoë Ann",
+                        "username": "zoeann",
+                        "dob": "2000-01-31",
+                        "bio": "honk"
+                      },
+                      "profile_complete": true,
+                      "two_factor_enabled": false,
+                      "sign_in_methods": {
+                        "email": true,
+                        "truecaller": false,
+                        "passkeys": [
+                          "cGFzc2tleS0x"
+                        ]
+                      },
+                      "created_at": "2026-11-13T19:23:28.942Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "name must be 1-50 characters",
+                    "value": {
+                      "error": "name must be 1-50 characters"
+                    }
+                  },
+                  "e1": {
+                    "summary": "username reserved",
+                    "value": {
+                      "error": "username reserved"
+                    }
+                  },
+                  "e2": {
+                    "summary": "dob must be YYYY-MM-DD",
+                    "value": {
+                      "error": "dob must be YYYY-MM-DD"
+                    }
+                  },
+                  "e3": {
+                    "summary": "you must be at least 13 years old",
+                    "value": {
+                      "error": "you must be at least 13 years old"
+                    }
+                  },
+                  "e4": {
+                    "summary": "bio must be at most 160 characters",
+                    "value": {
+                      "error": "bio must be at most 160 characters"
+                    }
+                  },
+                  "e5": {
+                    "summary": "avatar_url must be an https URL",
+                    "value": {
+                      "error": "avatar_url must be an https URL"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Username is taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "username is taken",
+                    "value": {
+                      "error": "username is taken"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/usernames/suggestions": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Suggest usernames from a name",
+        "operationId": "suggestUsernames",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Call as the user types their name (debounce on the client). Returns up to 5 usernames that are free right now; accents are stripped and non-Latin names get numbered fallbacks.",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "Zoë Ann"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Available usernames",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "suggestions"
+                  ],
+                  "properties": {
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "maxItems": 5
+                    }
+                  }
+                },
+                "examples": {
+                  "suggestions": {
+                    "summary": "suggestions",
+                    "value": {
+                      "suggestions": [
+                        "zoeann",
+                        "zoe.ann",
+                        "zoe_ann",
+                        "zoea",
+                        "zann"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "name missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "name query parameter is required",
+                    "value": {
+                      "error": "name query parameter is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/usernames/availability": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Check a username",
+        "operationId": "checkUsername",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Use while the user edits a username. Input is lowercased.",
+        "parameters": [
+          {
+            "name": "username",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "zoeann"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Availability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsernameAvailability"
+                },
+                "examples": {
+                  "available": {
+                    "summary": "available",
+                    "value": {
+                      "username": "goose_fan",
+                      "available": true,
+                      "reason": ""
+                    }
+                  },
+                  "taken": {
+                    "summary": "taken",
+                    "value": {
+                      "username": "zoeann",
+                      "available": false,
+                      "reason": "taken"
+                    }
+                  },
+                  "reserved": {
+                    "summary": "reserved",
+                    "value": {
+                      "username": "admin",
+                      "available": false,
+                      "reason": "reserved"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/assetlinks.json": {
+      "get": {
+        "tags": [
+          "well-known"
+        ],
+        "summary": "Android Digital Asset Links",
+        "operationId": "androidAssetLinks",
+        "security": [],
+        "description": "Served when `MOBILE_ANDROID_PACKAGE` and `MOBILE_ANDROID_CERT_FINGERPRINTS` are set. Must be reachable at `https://<WEBAUTHN_RP_ID>/.well-known/assetlinks.json` for Android passkeys.",
+        "responses": {
+          "200": {
+            "description": "Asset links",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "examples": {
+                  "links": {
+                    "summary": "links",
+                    "value": [
+                      {
+                        "relation": [
+                          "delegate_permission/common.handle_all_urls",
+                          "delegate_permission/common.get_login_creds"
+                        ],
+                        "target": {
+                          "namespace": "android_app",
+                          "package_name": "com.goose.app",
+                          "sha256_cert_fingerprints": [
+                            "AB:CD:…"
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not configured"
+          }
+        }
+      }
+    },
+    "/.well-known/apple-app-site-association": {
+      "get": {
+        "tags": [
+          "well-known"
+        ],
+        "summary": "Apple app site association",
+        "operationId": "appleAppSiteAssociation",
+        "security": [],
+        "description": "Served when `MOBILE_IOS_APP_IDS` is set. Must be reachable at `https://<WEBAUTHN_RP_ID>/.well-known/apple-app-site-association` for iOS passkeys.",
+        "responses": {
+          "200": {
+            "description": "webcredentials association",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "examples": {
+                  "aasa": {
+                    "summary": "aasa",
+                    "value": {
+                      "webcredentials": {
+                        "apps": [
+                          "TEAM123.com.goose.app"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not configured"
+          }
+        }
+      }
+    },
+    "/v1/webhooks/oauth": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Receive a connection event from the OAuth service",
+        "operationId": "oauthWebhook",
+        "security": [
+          {
+            "webhookSignature": []
+          }
+        ],
+        "description": "Called by the OAuth service, not by apps.\n\nSigned with a shared secret (`WEBHOOKS_OAUTH_SECRET`):\n\n```\nX-Webhook-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, \"<t>.<raw body>\")>\n```\n\nThe timestamp must be within 5 minutes of the server clock. Sign the exact bytes you send.\n\n**Retries:** any 2xx means done, don't retry. Retry on 5xx or network errors with the same event `id`; duplicates are ignored. Events can arrive out of order; `occurred_at` decides which one wins.\n\nThe endpoint is not rate limited per IP. It returns 503 until the secret is configured.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionEvent"
+              },
+              "examples": {
+                "connected": {
+                  "summary": "connected",
+                  "value": {
+                    "id": "evt_01JC9",
+                    "type": "connection.connected",
+                    "occurred_at": "2026-11-13T19:31:07Z",
+                    "user_id": "6af763b09c606f1eb93dcedc",
+                    "provider": "spotify",
+                    "account": {
+                      "id": "sp_123",
+                      "username": "zoe",
+                      "display_name": "Zoë",
+                      "avatar_url": "https://i.scdn.co/a.png",
+                      "profile_url": "https://open.spotify.com/user/sp_123",
+                      "metadata": {
+                        "country": "IN",
+                        "product": "premium"
+                      }
+                    }
+                  }
+                },
+                "updated": {
+                  "summary": "updated",
+                  "value": {
+                    "id": "evt_01JCA",
+                    "type": "connection.updated",
+                    "occurred_at": "2026-11-13T20:02:00Z",
+                    "user_id": "6af763b09c606f1eb93dcedc",
+                    "provider": "spotify",
+                    "account": {
+                      "id": "sp_123",
+                      "username": "zoe",
+                      "display_name": "Zoë A.",
+                      "avatar_url": "https://i.scdn.co/a.png",
+                      "profile_url": "https://open.spotify.com/user/sp_123",
+                      "metadata": {
+                        "country": "IN",
+                        "product": "premium"
+                      }
+                    }
+                  }
+                },
+                "disconnected": {
+                  "summary": "disconnected",
+                  "value": {
+                    "id": "evt_01JCB",
+                    "type": "connection.disconnected",
+                    "occurred_at": "2026-11-13T21:00:00Z",
+                    "user_id": "6af763b09c606f1eb93dcedc",
+                    "provider": "spotify"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Processed (see status). Do not retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookResult"
+                },
+                "examples": {
+                  "applied": {
+                    "value": {
+                      "id": "evt_01JC9",
+                      "status": "applied"
+                    }
+                  },
+                  "duplicate": {
+                    "value": {
+                      "id": "evt_01JC9",
+                      "status": "duplicate"
+                    }
+                  },
+                  "stale": {
+                    "value": {
+                      "id": "evt_01JC8",
+                      "status": "stale"
+                    }
+                  },
+                  "unknown_user": {
+                    "value": {
+                      "id": "evt_01JCC",
+                      "status": "ignored_unknown_user"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid event; fix it, don't retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "unknown provider myspace",
+                    "value": {
+                      "error": "unknown provider myspace"
+                    }
+                  },
+                  "e1": {
+                    "summary": "account.id is required for connected and updated events",
+                    "value": {
+                      "error": "account.id is required for connected and updated events"
+                    }
+                  },
+                  "e2": {
+                    "summary": "occurred_at is in the future",
+                    "value": {
+                      "error": "occurred_at is in the future"
+                    }
+                  },
+                  "e3": {
+                    "summary": "user_id is not a valid id",
+                    "value": {
+                      "error": "user_id is not a valid id"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signature problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing or malformed signature header",
+                    "value": {
+                      "error": "missing or malformed signature header"
+                    }
+                  },
+                  "e1": {
+                    "summary": "signature does not match",
+                    "value": {
+                      "error": "signature does not match"
+                    }
+                  },
+                  "e2": {
+                    "summary": "signature timestamp outside tolerance",
+                    "value": {
+                      "error": "signature timestamp outside tolerance"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 256 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "body too large",
+                    "value": {
+                      "error": "body too large"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Temporary failure; retry with the same id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "internal server error",
+                    "value": {
+                      "error": "internal server error"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Webhook secret not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "webhook is not configured",
+                    "value": {
+                      "error": "webhook is not configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/connections": {
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "My connections",
+        "operationId": "getMyConnections",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Every provider in display order with a `connected` true/false flag. Connected providers include the account profile received from the OAuth service.",
+        "responses": {
+          "200": {
+            "description": "All 17 providers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "connections"
+                  ],
+                  "properties": {
+                    "connections": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Connection"
+                      }
+                    }
+                  }
+                },
+                "examples": {
+                  "connections": {
+                    "value": {
+                      "connections": [
+                        {
+                          "provider": "youtube",
+                          "connected": false
+                        },
+                        {
+                          "provider": "spotify",
+                          "connected": true,
+                          "account": {
+                            "id": "sp_123",
+                            "username": "zoe",
+                            "display_name": "Zoë",
+                            "avatar_url": "https://i.scdn.co/a.png",
+                            "profile_url": "https://open.spotify.com/user/sp_123",
+                            "metadata": {
+                              "country": "IN",
+                              "product": "premium"
+                            }
+                          },
+                          "connected_at": "2026-11-13T19:31:07Z",
+                          "updated_at": "2026-11-13T20:01:07Z"
+                        },
+                        {
+                          "provider": "github",
+                          "connected": false,
+                          "updated_at": "2026-11-13T20:01:07Z"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "webhookSignature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Webhook-Signature",
+        "description": "t=<unix>,v1=<hex HMAC-SHA256(secret, \"<t>.<raw body>\")>"
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "mongo unavailable",
+              "redis unavailable"
+            ]
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable message, safe to show"
+          }
+        }
+      },
+      "AuthRequest": {
+        "type": "object",
+        "required": [
+          "method"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "email",
+              "passkey",
+              "truecaller"
+            ]
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "email: both steps (same address)"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$",
+            "description": "email step 2: code from the email"
+          },
+          "challenge_id": {
+            "type": "string",
+            "description": "passkey step 2: from step 1"
+          },
+          "credential": {
+            "type": "object",
+            "description": "passkey step 2: PublicKeyCredential JSON from navigator.credentials.create/get"
+          },
+          "authorization_code": {
+            "type": "string",
+            "description": "truecaller: from the Truecaller OAuth SDK"
+          },
+          "code_verifier": {
+            "type": "string",
+            "description": "truecaller: PKCE verifier used for that code"
+          }
+        }
+      },
+      "UnlinkRequest": {
+        "type": "object",
+        "required": [
+          "method"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "email",
+              "passkey",
+              "truecaller"
+            ]
+          },
+          "credential_id": {
+            "type": "string",
+            "description": "passkey only: id from user.sign_in_methods.passkeys"
+          }
+        }
+      },
+      "CodeSent": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "code_sent"
+          }
+        },
+        "description": "Email sent; repeat the request with `code`."
+      },
+      "PasskeyChallenge": {
+        "type": "object",
+        "required": [
+          "challenge_id",
+          "options"
+        ],
+        "properties": {
+          "challenge_id": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "description": "WebAuthn options ({publicKey: …}) for navigator.credentials.create (register/link) or .get (login)"
+          }
+        }
+      },
+      "MFAChallenge": {
+        "type": "object",
+        "required": [
+          "mfa_required",
+          "mfa_token"
+        ],
+        "properties": {
+          "mfa_required": {
+            "type": "boolean",
+            "const": true
+          },
+          "mfa_token": {
+            "type": "string"
+          }
+        },
+        "description": "Login needs an authenticator code: POST /v1/auth/2fa/verify."
+      },
+      "Session": {
+        "type": "object",
+        "required": [
+          "token",
+          "expires_at",
+          "user"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "JWT; send as `Authorization: Bearer <token>`"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        }
+      },
+      "Linked": {
+        "type": "object",
+        "required": [
+          "user"
+        ],
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "description": "Method linked; user shows the updated sign-in methods."
+      },
+      "AuthResult": {
+        "description": "One of the step results. Tell them apart by which field is present: `status`, `challenge_id`, `mfa_token`, `token`, or `user` alone.",
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CodeSent"
+          },
+          {
+            "$ref": "#/components/schemas/PasskeyChallenge"
+          },
+          {
+            "$ref": "#/components/schemas/MFAChallenge"
+          },
+          {
+            "$ref": "#/components/schemas/Session"
+          },
+          {
+            "$ref": "#/components/schemas/Linked"
+          }
+        ]
+      },
+      "CodeRequest": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$"
+          }
+        }
+      },
+      "TOTPSetup": {
+        "type": "object",
+        "required": [
+          "secret",
+          "otpauth_url"
+        ],
+        "properties": {
+          "secret": {
+            "type": "string",
+            "description": "base32"
+          },
+          "otpauth_url": {
+            "type": "string"
+          }
+        }
+      },
+      "ProfileInput": {
+        "type": "object",
+        "required": [
+          "name",
+          "username",
+          "dob"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 30,
+            "pattern": "^[a-z0-9](?:[a-z0-9._]*[a-z0-9])?$",
+            "description": "lowercase letters, digits, . and _; no repeated . or _; some names are reserved"
+          },
+          "dob": {
+            "type": "string",
+            "format": "date",
+            "description": "YYYY-MM-DD; at least 13 years ago"
+          },
+          "avatar_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "https only"
+          },
+          "bio": {
+            "type": "string",
+            "maxLength": 160
+          }
+        },
+        "description": "Profile to save. All rules are enforced; violations return 400."
+      },
+      "Profile": {
+        "type": "object",
+        "required": [
+          "name",
+          "username",
+          "dob"
+        ],
+        "description": "Saved profile. Fields are empty strings until profile setup is done.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "dob": {
+            "type": "string",
+            "description": "YYYY-MM-DD, or empty"
+          },
+          "avatar_url": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": [
+          "id",
+          "profile",
+          "profile_complete",
+          "two_factor_enabled",
+          "sign_in_methods",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/Profile"
+          },
+          "profile_complete": {
+            "type": "boolean",
+            "description": "false until name, username and dob are set: send the user to profile setup"
+          },
+          "two_factor_enabled": {
+            "type": "boolean"
+          },
+          "sign_in_methods": {
+            "type": "object",
+            "required": [
+              "email",
+              "truecaller",
+              "passkeys"
+            ],
+            "properties": {
+              "email": {
+                "type": "boolean"
+              },
+              "truecaller": {
+                "type": "boolean"
+              },
+              "passkeys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "base64url credential ids; pass one as credential_id to unlink it"
+              }
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "UsernameAvailability": {
+        "type": "object",
+        "required": [
+          "username",
+          "available",
+          "reason"
+        ],
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "description": "empty when available; otherwise taken, reserved, or the format rule that failed"
+          }
+        }
+      },
+      "Provider": {
+        "type": "string",
+        "enum": [
+          "youtube",
+          "roblox",
+          "instagram",
+          "x",
+          "spotify",
+          "github",
+          "riot_games",
+          "linkedin",
+          "reddit",
+          "playstation",
+          "custom_domain",
+          "crunchyroll",
+          "amazon_prime",
+          "xbox",
+          "paypal",
+          "steam",
+          "epic_games"
+        ],
+        "description": "Connection providers, in display order."
+      },
+      "ConnectionAccount": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Account id at the provider"
+          },
+          "username": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "avatar_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "https only"
+          },
+          "profile_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "https only"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Provider-specific extra fields, stored as sent"
+          }
+        },
+        "description": "Profile info from the provider. Access/refresh tokens stay in the OAuth service and are never sent here."
+      },
+      "Connection": {
+        "type": "object",
+        "required": [
+          "provider",
+          "connected"
+        ],
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "account": {
+            "$ref": "#/components/schemas/ConnectionAccount"
+          },
+          "connected_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Absent if the provider was never connected"
+          }
+        }
+      },
+      "ConnectionEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "occurred_at",
+          "user_id",
+          "provider"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Unique per event; resending the same id is a no-op (deduplicated for 7 days)"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "connection.connected",
+              "connection.updated",
+              "connection.disconnected"
+            ]
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it happened at the OAuth service. Used for ordering: an event older than the stored one is ignored. Max 5 minutes in the future."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "This backend's user id (User.id)"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "account": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConnectionAccount"
+              }
+            ],
+            "description": "Required for connected and updated; ignored for disconnected"
+          }
+        }
+      },
+      "WebhookResult": {
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "applied",
+              "duplicate",
+              "stale",
+              "ignored_unknown_user"
+            ],
+            "description": "applied: stored. duplicate: event id already processed. stale: a newer event for this user and provider is already stored. ignored_unknown_user: no such user."
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {
+    "oauthConnectionEvent": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "Connection event (sent to POST /v1/webhooks/oauth)",
+        "operationId": "oauthConnectionEventWebhook",
+        "security": [
+          {
+            "webhookSignature": []
+          }
+        ],
+        "description": "Called by the OAuth service, not by apps.\n\nSigned with a shared secret (`WEBHOOKS_OAUTH_SECRET`):\n\n```\nX-Webhook-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, \"<t>.<raw body>\")>\n```\n\nThe timestamp must be within 5 minutes of the server clock. Sign the exact bytes you send.\n\n**Retries:** any 2xx means done, don't retry. Retry on 5xx or network errors with the same event `id`; duplicates are ignored. Events can arrive out of order; `occurred_at` decides which one wins.\n\nThe endpoint is not rate limited per IP. It returns 503 until the secret is configured.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionEvent"
+              },
+              "examples": {
+                "connected": {
+                  "summary": "connected",
+                  "value": {
+                    "id": "evt_01JC9",
+                    "type": "connection.connected",
+                    "occurred_at": "2026-11-13T19:31:07Z",
+                    "user_id": "6af763b09c606f1eb93dcedc",
+                    "provider": "spotify",
+                    "account": {
+                      "id": "sp_123",
+                      "username": "zoe",
+                      "display_name": "Zoë",
+                      "avatar_url": "https://i.scdn.co/a.png",
+                      "profile_url": "https://open.spotify.com/user/sp_123",
+                      "metadata": {
+                        "country": "IN",
+                        "product": "premium"
+                      }
+                    }
+                  }
+                },
+                "updated": {
+                  "summary": "updated",
+                  "value": {
+                    "id": "evt_01JCA",
+                    "type": "connection.updated",
+                    "occurred_at": "2026-11-13T20:02:00Z",
+                    "user_id": "6af763b09c606f1eb93dcedc",
+                    "provider": "spotify",
+                    "account": {
+                      "id": "sp_123",
+                      "username": "zoe",
+                      "display_name": "Zoë A.",
+                      "avatar_url": "https://i.scdn.co/a.png",
+                      "profile_url": "https://open.spotify.com/user/sp_123",
+                      "metadata": {
+                        "country": "IN",
+                        "product": "premium"
+                      }
+                    }
+                  }
+                },
+                "disconnected": {
+                  "summary": "disconnected",
+                  "value": {
+                    "id": "evt_01JCB",
+                    "type": "connection.disconnected",
+                    "occurred_at": "2026-11-13T21:00:00Z",
+                    "user_id": "6af763b09c606f1eb93dcedc",
+                    "provider": "spotify"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Processed (see status). Do not retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookResult"
+                },
+                "examples": {
+                  "applied": {
+                    "value": {
+                      "id": "evt_01JC9",
+                      "status": "applied"
+                    }
+                  },
+                  "duplicate": {
+                    "value": {
+                      "id": "evt_01JC9",
+                      "status": "duplicate"
+                    }
+                  },
+                  "stale": {
+                    "value": {
+                      "id": "evt_01JC8",
+                      "status": "stale"
+                    }
+                  },
+                  "unknown_user": {
+                    "value": {
+                      "id": "evt_01JCC",
+                      "status": "ignored_unknown_user"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid event; fix it, don't retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "unknown provider myspace",
+                    "value": {
+                      "error": "unknown provider myspace"
+                    }
+                  },
+                  "e1": {
+                    "summary": "account.id is required for connected and updated events",
+                    "value": {
+                      "error": "account.id is required for connected and updated events"
+                    }
+                  },
+                  "e2": {
+                    "summary": "occurred_at is in the future",
+                    "value": {
+                      "error": "occurred_at is in the future"
+                    }
+                  },
+                  "e3": {
+                    "summary": "user_id is not a valid id",
+                    "value": {
+                      "error": "user_id is not a valid id"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Signature problem",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing or malformed signature header",
+                    "value": {
+                      "error": "missing or malformed signature header"
+                    }
+                  },
+                  "e1": {
+                    "summary": "signature does not match",
+                    "value": {
+                      "error": "signature does not match"
+                    }
+                  },
+                  "e2": {
+                    "summary": "signature timestamp outside tolerance",
+                    "value": {
+                      "error": "signature timestamp outside tolerance"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body over 256 KB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "body too large",
+                    "value": {
+                      "error": "body too large"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Temporary failure; retry with the same id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "internal server error",
+                    "value": {
+                      "error": "internal server error"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Webhook secret not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "webhook is not configured",
+                    "value": {
+                      "error": "webhook is not configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
