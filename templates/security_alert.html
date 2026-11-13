@@ -1,0 +1,14 @@
+{{define "security_alert.html"}}{{template "layout" .}}{{end}}
+{{define "content"}}
+          <tr>
+            <td style="font-size:18px;font-weight:700;color:#0a0a0a;padding-bottom:12px;">{{.Title}}</td>
+          </tr>
+          <tr>
+            <td style="font-size:16px;line-height:24px;color:#3f3f46;padding-bottom:24px;">{{.Message}}</td>
+          </tr>
+          <tr>
+            <td style="font-size:13px;line-height:20px;color:#71717a;">
+              {{.When}}. If this wasn't you, sign in and review your sign-in methods and two-factor settings right away.
+            </td>
+          </tr>
+{{end}}
