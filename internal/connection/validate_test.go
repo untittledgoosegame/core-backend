@@ -3,13 +3,15 @@ package connection
 import (
 	"testing"
 	"time"
+
+	"github.com/untittledgoosegame/core-backend/internal/provider"
 )
 
 func TestEventValidate(t *testing.T) {
 	now := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
 	valid := Event{
 		ID: "evt_1", Type: EventConnected, OccurredAt: now, UserID: "6af763b09c606f1eb93dcedc",
-		Provider: Spotify, Account: &Account{ID: "sp_1", AvatarURL: "https://i.scdn.co/a.png"},
+		Provider: provider.Spotify, Account: &Account{ID: "sp_1", AvatarURL: "https://i.scdn.co/a.png"},
 	}
 	if err := valid.Validate(now); err != nil {
 		t.Fatalf("valid event rejected: %v", err)
