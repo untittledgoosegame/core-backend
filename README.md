@@ -1,88 +1,125 @@
 # core-backend
 
-Go API backed by MongoDB and Redis. Sign-in with email codes, passkeys or Truecaller, optional authenticator-app 2FA, then profile setup.
+Go API for Goose. Handles sign-up and sign-in (email codes, passkeys, Truecaller), optional authenticator-app 2FA,
+user profiles and usernames, and third-party account connections pushed in by the OAuth service.
 
-## Quick start
+**Stack:** Go 1.26 · chi · MongoDB · Redis · JWT · WebAuthn · TOTP · SMTP
+
+## Getting started
+
+Requirements: Go 1.26+, Docker, and [air](https://github.com/air-verse/air) for hot reload.
 
 ```sh
 cp .env.example .env
-make db-up      # MongoDB + Redis + Mailpit (emails show up at http://localhost:8025)
-make dev        # hot reload with air
+make db-up        # MongoDB on :27017, Redis on :6379
+make dev          # API on http://127.0.0.1:8080 with hot reload
+curl localhost:8080/health
 ```
 
-`make help` lists every target. API reference: [`docs/openapi.json`](docs/openapi.json).
+Emails go to `SMTP_HOST:SMTP_PORT` (default `localhost:1025`). For local testing run Mailpit and open
+http://localhost:8025:
 
-## Folder structure
-
-```
-cmd/server/            entry point: load config, connect, wire everything, start the server
-internal/              application code (not importable by other modules)
-  api/
-    routes/            every URL and the middleware applied to it, in one file
-    handlers/          HTTP handlers: decode request, call a service, write JSON
-    middleware/        auth (JWT), client IP, rate limiting, request logging
-  auth/                sign-in logic, one file per concern
-    service.go         Register / Login entry points and session issuing
-    email.go           email code flows
-    passkey.go         WebAuthn flows and mobile passkey origins
-    truecaller.go      Truecaller OAuth client and flows
-    twofactor.go       TOTP setup, enable, disable, verify
-    link.go            link / unlink extra sign-in methods
-    otp.go             email codes in Redis (hashed, expiring, attempt-limited)
-    challenges.go      passkey and 2FA challenges (Mongo, TTL indexed)
-    token.go           JWT issue / parse
-  user/                user model, Mongo store, username + profile rules
-  connection/          third-party connections (connected flag + profile) fed by the OAuth webhook
-  server/              HTTP server start / graceful shutdown
-pkg/                   reusable building blocks with no app logic
-  config/              Viper config (.env, config.yaml, environment variables)
-  logger/              charmbracelet/log setup (level, text or json)
-  database/            MongoDB connection
-  cache/               Redis connection
-  mailer/              SMTP sender + template rendering
-  apperr/              errors that carry an HTTP status
-  httpx/               JSON decode / respond / error helpers
-  secret/              AES-256-GCM encryption for secrets at rest
-  webhook/             HMAC webhook signing and verification
-templates/             email templates (embedded into the binary)
-docs/                  OpenAPI spec
-docker/                local MongoDB, Redis + Mailpit
+```sh
+docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit
 ```
 
-Dependencies point one way: `cmd` → `internal/api` → `internal/auth`, `internal/user` → `pkg`.
+## Make targets
+
+| Target | What it does |
+|---|---|
+| `make dev` | Run with hot reload (air) |
+| `make run` | Run the server |
+| `make build` | Build `bin/server` |
+| `make test` | Run tests |
+| `make lint` | `go vet` |
+| `make fmt` / `make tidy` | `gofmt` / `go mod tidy` |
+| `make db-up` / `db-down` / `db-logs` | Start, stop, tail local MongoDB and Redis |
+| `make clean` | Remove build output |
 
 ## Configuration
 
-Settings are read in this order, first match wins: environment variables, `.env`, `config.yaml`, built-in defaults.
-See `.env.example` (or `config.example.yaml`) for every option.
+Values are read from environment variables, then `.env`, then an optional `config.yaml` (in `.` or `./config`),
+then built-in defaults. `.env.example` lists every option.
 
-Required outside `ENV=dev`: `JWT_SECRET` and `SECURITY_ENCRYPTION_KEY` (`openssl rand -base64 32`).
+| Variable | Purpose |
+|---|---|
+| `ENV` | `dev` relaxes required secrets |
+| `SERVER_HOST`, `SERVER_PORT`, `SERVER_TRUSTED_PROXIES` | Listen address; proxy CIDRs whose `X-Forwarded-For` is trusted |
+| `MONGO_URI`, `MONGO_DATABASE` | MongoDB |
+| `REDIS_URL`, `REDIS_PASSWORD`, `REDIS_DB` | Redis (email codes) |
+| `JWT_SECRET`, `JWT_TTL` | Session tokens |
+| `SECURITY_ENCRYPTION_KEY` | Encrypts 2FA secrets at rest (`openssl rand -base64 32`) |
+| `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_ORIGINS` | Passkey relying party |
+| `TRUECALLER_CLIENT_ID`, `TRUECALLER_BASE_URL` | Truecaller OAuth |
+| `SMTP_*` | Outgoing email |
+| `RATE_LIMIT_GLOBAL_PER_MINUTE`, `RATE_LIMIT_AUTH_PER_MINUTE` | Per-IP limits |
+| `MOBILE_ANDROID_*`, `MOBILE_IOS_APP_IDS` | Mobile passkey origins and well-known files |
+| `WEBHOOKS_OAUTH_SECRET` | HMAC secret shared with the OAuth service; empty disables the webhook |
 
-## Auth flow
+`JWT_SECRET` and `SECURITY_ENCRYPTION_KEY` are required whenever `ENV` is not `dev`.
 
-1. `POST /v1/auth/register` or `/v1/auth/login` with `method` = `email`, `passkey` or `truecaller`.
-2. If 2FA is on, login returns `mfa_token`; finish with `POST /v1/auth/2fa/verify`.
-3. If `user.profile_complete` is false, collect name, username, date of birth (`PUT /v1/users/me/profile`).
+## API
 
-Signed-in users can add or remove methods with `POST` / `DELETE /v1/auth/link`.
+Full reference: [`docs/openapi.json`](docs/openapi.json).
 
-## Connections (OAuth service webhook)
+| Method | Path | Auth |
+|---|---|---|
+| `GET` | `/health` | – |
+| `POST` | `/v1/auth/register`, `/v1/auth/login` | – |
+| `POST` | `/v1/auth/2fa/verify` | MFA token |
+| `POST` / `DELETE` | `/v1/auth/link` | Bearer |
+| `POST` | `/v1/auth/2fa/setup`, `/enable`, `/disable` | Bearer |
+| `GET` | `/v1/users/me` | Bearer |
+| `PUT` | `/v1/users/me/profile` | Bearer |
+| `GET` | `/v1/users/me/connections` | Bearer |
+| `GET` | `/v1/usernames/suggestions`, `/v1/usernames/availability` | Bearer |
+| `POST` | `/v1/webhooks/oauth` | HMAC signature |
+| `GET` | `/.well-known/assetlinks.json`, `/.well-known/apple-app-site-association` | – |
 
-A separate OAuth service connects users to YouTube, Roblox, Instagram, X, Spotify, GitHub, Riot Games, LinkedIn, Reddit,
-PlayStation, custom domains, Crunchyroll, Amazon Prime, Xbox, PayPal, Steam and Epic Games. It keeps the tokens and
-sends profile changes here:
+Auth routes have a stricter rate limit than the rest; the webhook is exempt.
 
-- **Webhook URL:** `POST /v1/webhooks/oauth`
-- **Signature:** `X-Webhook-Signature: t=<unix>,v1=<hex HMAC-SHA256(WEBHOOKS_OAUTH_SECRET, "<t>.<raw body>")>`
-- **Events:** `connection.connected`, `connection.updated`, `connection.disconnected`, each with a unique `id`,
-  `occurred_at`, `user_id`, `provider` and (except disconnect) the `account` profile.
+### Sign-in flow
 
-Stored in the `connections` collection, one document per user and provider. Apps read
-`GET /v1/users/me/connections`, which lists all 17 providers with `connected: true/false`.
-Full payload and response details are in `docs/openapi.json` (`webhooks` section).
+1. `POST /v1/auth/register` or `/v1/auth/login` with `method` set to `email`, `passkey` or `truecaller`.
+2. If 2FA is enabled, the response carries an `mfa_token`; finish with `POST /v1/auth/2fa/verify`.
+3. If `user.profile_complete` is `false`, collect name, username and date of birth via `PUT /v1/users/me/profile`.
 
-## Mobile passkeys
+Signed-in users can attach or remove extra sign-in methods with `POST` / `DELETE /v1/auth/link`.
 
-Set `MOBILE_ANDROID_PACKAGE`, `MOBILE_ANDROID_CERT_FINGERPRINTS` and `MOBILE_IOS_APP_IDS`. The server then accepts
-the Android app's origin and serves `/.well-known/assetlinks.json` and `/.well-known/apple-app-site-association`.
-Those two files must be reachable at `https://<WEBAUTHN_RP_ID>/.well-known/...`, so route them to this service.
+### Connections webhook
+
+The OAuth service owns provider tokens and pushes profile changes to `POST /v1/webhooks/oauth`.
+
+- Header: `X-Webhook-Signature: t=<unix>,v1=<hex HMAC-SHA256(WEBHOOKS_OAUTH_SECRET, "<t>.<raw body>")>`
+- Events: `connection.connected`, `connection.updated`, `connection.disconnected`
+- Providers: YouTube, Roblox, Instagram, X, Spotify, GitHub, Riot Games, LinkedIn, Reddit, PlayStation,
+  custom domain, Crunchyroll, Amazon Prime, Xbox, PayPal, Steam, Epic Games
+
+`GET /v1/users/me/connections` returns every provider with `connected: true/false`.
+
+### Mobile passkeys
+
+Set `MOBILE_ANDROID_PACKAGE`, `MOBILE_ANDROID_CERT_FINGERPRINTS` and `MOBILE_IOS_APP_IDS`. The server then accepts the
+Android app origin and serves the two `/.well-known/` files, which must be reachable at
+`https://<WEBAUTHN_RP_ID>/.well-known/...`.
+
+## Project layout
+
+```
+cmd/server/          entry point: config, connections, wiring, start
+internal/
+  api/routes/        every route and its middleware
+  api/handlers/      decode request, call service, write JSON
+  api/middleware/    JWT auth, client IP, rate limits, request logs
+  auth/              sign-in flows, JWT, email codes, passkeys, Truecaller, 2FA, linking
+  user/              user model, Mongo store, username and profile rules
+  connection/        third-party connections from the OAuth webhook
+  server/            HTTP server and graceful shutdown
+pkg/                 app-agnostic helpers: config, logger, database, cache,
+                     mailer, apperr, httpx, secret, webhook
+templates/           email templates, embedded in the binary
+docs/                OpenAPI spec
+docker/              local MongoDB and Redis
+```
+
+Dependencies flow one way: `cmd` → `internal/api` → `internal/*` → `pkg`.
