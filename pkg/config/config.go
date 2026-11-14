@@ -15,20 +15,20 @@ import (
 )
 
 type Config struct {
-	Env        string           `mapstructure:"env"`
-	Log        logger.Config    `mapstructure:"log"`
-	App        AppSettings      `mapstructure:"app"`
-	Server     ServerConfig     `mapstructure:"server"`
-	Mongo      MongoConfig      `mapstructure:"mongo"`
-	Redis      cache.Config     `mapstructure:"redis"`
-	JWT        JWTConfig        `mapstructure:"jwt"`
-	WebAuthn   WebAuthnConfig   `mapstructure:"webauthn"`
-	Truecaller TruecallerConfig `mapstructure:"truecaller"`
-	SMTP       SMTPConfig       `mapstructure:"smtp"`
-	Security   SecurityConfig   `mapstructure:"security"`
-	RateLimit  RateLimitConfig  `mapstructure:"rate_limit"`
-	Mobile     MobileConfig     `mapstructure:"mobile"`
-	Webhooks   WebhooksConfig   `mapstructure:"webhooks"`
+	Env          string             `mapstructure:"env"`
+	Log          logger.Config      `mapstructure:"log"`
+	App          AppSettings        `mapstructure:"app"`
+	Server       ServerConfig       `mapstructure:"server"`
+	Mongo        MongoConfig        `mapstructure:"mongo"`
+	Redis        cache.Config       `mapstructure:"redis"`
+	JWT          JWTConfig          `mapstructure:"jwt"`
+	WebAuthn     WebAuthnConfig     `mapstructure:"webauthn"`
+	Truecaller   TruecallerConfig   `mapstructure:"truecaller"`
+	SMTP         SMTPConfig         `mapstructure:"smtp"`
+	Security     SecurityConfig     `mapstructure:"security"`
+	RateLimit    RateLimitConfig    `mapstructure:"rate_limit"`
+	Mobile       MobileConfig       `mapstructure:"mobile"`
+	OAuthService OAuthServiceConfig `mapstructure:"oauth_service"`
 }
 
 type AppSettings struct {
@@ -84,8 +84,9 @@ type MobileConfig struct {
 	IOSAppIDs               []string `mapstructure:"ios_app_ids"`
 }
 
-type WebhooksConfig struct {
-	OAuthSecret string `mapstructure:"oauth_secret"`
+type OAuthServiceConfig struct {
+	BaseURL string `mapstructure:"base_url"`
+	Secret  string `mapstructure:"secret"`
 }
 
 var AppConfig Config
@@ -135,7 +136,8 @@ func LoadConfig() error {
 	viper.SetDefault("mobile.android_package", "")
 	viper.SetDefault("mobile.android_cert_fingerprints", []string{})
 	viper.SetDefault("mobile.ios_app_ids", []string{})
-	viper.SetDefault("webhooks.oauth_secret", "")
+	viper.SetDefault("oauth_service.base_url", "")
+	viper.SetDefault("oauth_service.secret", "")
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
