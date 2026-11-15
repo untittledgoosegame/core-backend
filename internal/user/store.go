@@ -117,12 +117,36 @@ func byID(id bson.ObjectID, extra ...bson.E) bson.D {
 
 func set(fields bson.D) bson.D { return bson.D{{Key: "$set", Value: fields}} }
 
-func (s *Store) SetProfile(ctx context.Context, id bson.ObjectID, p Profile) (*User, error) {
-	u, err := s.update(ctx, byID(id), set(bson.D{{Key: "profile", Value: p}}))
+// SetProfile updates the editable fields only; the picture is managed by Avatars.
+func (s *Store) SetProfile(ctx context.Context, id bson.ObjectID, p ProfileInput) (*User, error) {
+	fields := bson.D{
+		{Key: "profile.name", Value: p.Name},
+		{Key: "profile.username", Value: p.Username},
+		{Key: "profile.dob", Value: p.DOB},
+	}
+	var unset bson.D
+	if p.Bio == "" {
+		unset = bson.D{{Key: "profile.bio", Value: ""}}
+	} else {
+		fields = append(fields, bson.E{Key: "profile.bio", Value: p.Bio})
+	}
+	change := set(fields)
+	if len(unset) > 0 {
+		change = append(change, bson.E{Key: "$unset", Value: unset})
+	}
+	u, err := s.update(ctx, byID(id), change)
 	if mongo.IsDuplicateKeyError(err) {
 		return nil, apperr.Conflict("username is taken")
 	}
 	return u, err
+}
+
+func (s *Store) SetAvatar(ctx context.Context, id bson.ObjectID, url, key string) (*User, error) {
+	return s.update(ctx, byID(id), set(bson.D{{Key: "profile.avatar_url", Value: url}, {Key: "profile.avatar_key", Value: key}}))
+}
+
+func (s *Store) ClearAvatar(ctx context.Context, id bson.ObjectID) (*User, error) {
+	return s.update(ctx, byID(id), bson.D{{Key: "$unset", Value: bson.D{{Key: "profile.avatar_url", Value: ""}, {Key: "profile.avatar_key", Value: ""}}}})
 }
 
 func (s *Store) SetTOTP(ctx context.Context, id bson.ObjectID, t TOTP) (*User, error) {

@@ -36,17 +36,16 @@ func TestUsernameProblem(t *testing.T) {
 
 func TestNormalizeProfile(t *testing.T) {
 	now := time.Date(2026, 11, 14, 0, 0, 0, 0, time.UTC)
-	base := Profile{Name: " Goose ", Username: "Goose.Fan", DOB: "2000-01-31"}
+	base := ProfileInput{Name: " Goose ", Username: "Goose.Fan", DOB: "2000-01-31"}
 
 	p, err := NormalizeProfile(base, now)
 	if err != nil || p.Username != "goose.fan" || p.Name != "Goose" {
 		t.Fatalf("got %+v, %v", p, err)
 	}
-	for _, bad := range []Profile{
+	for _, bad := range []ProfileInput{
 		{Name: "", Username: "goose", DOB: "2000-01-01"},
 		{Name: "G", Username: "goose", DOB: "2014-01-01"},
 		{Name: "G", Username: "goose", DOB: "01/01/2000"},
-		{Name: "G", Username: "goose", DOB: "2000-01-01", AvatarURL: "http://x.com/a.png"},
 	} {
 		if _, err := NormalizeProfile(bad, now); err == nil {
 			t.Errorf("expected error for %+v", bad)

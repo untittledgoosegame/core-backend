@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
-	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -131,11 +130,18 @@ func (s *Store) UsernameAvailable(ctx context.Context, username string) (bool, s
 	return true, "", nil
 }
 
-func NormalizeProfile(p Profile, now time.Time) (Profile, error) {
+// ProfileInput is what users edit directly; the picture goes through the avatar upload instead.
+type ProfileInput struct {
+	Name     string `json:"name"`
+	Username string `json:"username"`
+	DOB      string `json:"dob"`
+	Bio      string `json:"bio,omitempty"`
+}
+
+func NormalizeProfile(p ProfileInput, now time.Time) (ProfileInput, error) {
 	p.Name = strings.TrimSpace(p.Name)
 	p.Username = strings.ToLower(strings.TrimSpace(p.Username))
 	p.Bio = strings.TrimSpace(p.Bio)
-	p.AvatarURL = strings.TrimSpace(p.AvatarURL)
 
 	if n := utf8.RuneCountInString(p.Name); n == 0 || n > maxNameLen {
 		return p, apperr.BadRequest(fmt.Sprintf("name must be 1-%d characters", maxNameLen))
@@ -152,12 +158,6 @@ func NormalizeProfile(p Profile, now time.Time) (Profile, error) {
 	}
 	if utf8.RuneCountInString(p.Bio) > maxBioLen {
 		return p, apperr.BadRequest(fmt.Sprintf("bio must be at most %d characters", maxBioLen))
-	}
-	if p.AvatarURL != "" {
-		u, err := url.Parse(p.AvatarURL)
-		if err != nil || u.Scheme != "https" || u.Host == "" {
-			return p, apperr.BadRequest("avatar_url must be an https URL")
-		}
 	}
 	return p, nil
 }

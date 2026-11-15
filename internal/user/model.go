@@ -37,6 +37,7 @@ type Profile struct {
 	Username  string `bson:"username,omitempty" json:"username"`
 	DOB       string `bson:"dob,omitempty" json:"dob"`
 	AvatarURL string `bson:"avatar_url,omitempty" json:"avatar_url,omitempty"`
+	AvatarKey string `bson:"avatar_key,omitempty" json:"-"`
 	Bio       string `bson:"bio,omitempty" json:"bio,omitempty"`
 }
 

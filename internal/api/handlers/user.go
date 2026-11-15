@@ -17,7 +17,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
-	var p user.Profile
+	var p user.ProfileInput
 	if err := httpx.Decode(w, r, &p); err != nil {
 		httpx.Error(w, r, err)
 		return
