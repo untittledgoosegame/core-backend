@@ -54,7 +54,12 @@ func New(h *handlers.Handler, tokens auth.Tokens, cfg config.Config) http.Handle
 			r.Use(requireAuth)
 			r.Get("/v1/users/me", h.Me)
 			r.Put("/v1/users/me/profile", h.UpdateProfile)
-			r.Get("/v1/users/me/connections", h.MyConnections)
+			r.Route("/v1/users/me/connections", func(r chi.Router) {
+				r.Get("/", h.ListConnections)
+				r.Get("/{provider}", h.GetConnection)
+				r.Post("/{provider}", h.ConnectProvider)
+				r.Delete("/{provider}", h.DisconnectProvider)
+			})
 			r.Get("/v1/usernames/suggestions", h.SuggestUsernames)
 			r.Get("/v1/usernames/availability", h.UsernameAvailability)
 		})

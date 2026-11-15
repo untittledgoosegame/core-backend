@@ -52,10 +52,11 @@ func main() {
 		log.Fatalf("Failed to create user indexes: %v", err)
 	}
 
-	connections := connection.NewStore(db)
-	if err := connections.EnsureIndexes(ctx); err != nil {
+	connectionStore := connection.NewStore(db)
+	if err := connectionStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("Failed to create connection indexes: %v", err)
 	}
+	connections := connection.NewService(connectionStore, users, rdb, cfg.OAuthService)
 
 	mail := mailer.New(cfg.SMTP, cfg.App.Name, cfg.IsDev())
 	authService, err := auth.NewService(ctx, db, rdb, users, mail, cfg)
