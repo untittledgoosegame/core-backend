@@ -1,4 +1,4 @@
-COMPOSE = docker compose -f docker/docker-compose.yml
+COMPOSE = docker compose -f docker/compose.yml
 
 .PHONY: help install dev run build test lint fmt tidy db-up db-down db-logs clean
 
@@ -11,8 +11,8 @@ help:
 	@echo "lint     - go vet"
 	@echo "fmt      - gofmt the codebase"
 	@echo "tidy     - go mod tidy"
-	@echo "db-up    - start mongo + redis + mailpit (docker; inbox at http://localhost:8025)"
-	@echo "db-down  - stop mongo + redis + mailpit"
+	@echo "db-up    - start mongo, redis, mailpit (http://localhost:8025) and s3mock (R2 stand-in, :9090)"
+	@echo "db-down  - stop the local services"
 	@echo "db-logs  - tail mongo logs"
 	@echo "clean    - remove build artifacts"
 
