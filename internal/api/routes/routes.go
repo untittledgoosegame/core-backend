@@ -15,6 +15,7 @@ import (
 func New(h *handlers.Handler, tokens auth.Tokens, cfg config.Config) http.Handler {
 	r := chi.NewRouter()
 	r.Use(
+		middleware.DecodedPath,
 		chimw.RequestID,
 		middleware.ClientIP(cfg.Server.TrustedProxies),
 		middleware.RequestLogger,
@@ -52,11 +53,11 @@ func New(h *handlers.Handler, tokens auth.Tokens, cfg config.Config) http.Handle
 
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth)
-			r.Get("/v1/users/me", h.Me)
-			r.Put("/v1/users/me/profile", h.UpdateProfile)
-			r.Put("/v1/users/me/avatar", h.UploadAvatar)
-			r.Delete("/v1/users/me/avatar", h.DeleteAvatar)
-			r.Route("/v1/users/me/connections", func(r chi.Router) {
+			r.Get("/v1/users/@me", h.Me)
+			r.Put("/v1/users/@me/profile", h.UpdateProfile)
+			r.Put("/v1/users/@me/avatar", h.UploadAvatar)
+			r.Delete("/v1/users/@me/avatar", h.DeleteAvatar)
+			r.Route("/v1/users/@me/connections", func(r chi.Router) {
 				r.Get("/", h.ListConnections)
 				r.Get("/{provider}", h.GetConnection)
 				r.Post("/{provider}", h.ConnectProvider)
