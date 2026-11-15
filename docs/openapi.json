@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Core Backend API",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "description": "Sign-in flow: **register or login** (email code, passkey or Truecaller) → optional **2FA** → **profile setup**.\n\n- All bodies are JSON; unknown fields are rejected (400).\n- Errors are `{\"error\": \"message\"}` with a matching HTTP status.\n- Authenticated routes need `Authorization: Bearer <token>` from a `Session`.\n- `POST /v1/webhooks/oauth` is server-to-server, HMAC-signed and not rate limited.\n- Rate limits per client IP: 120 requests/minute overall, 10/minute on register, login, 2FA verify/enable/disable and link. Exceeding them returns 429.\n\n### Email codes\n- 6 digits, valid for **10 minutes**, usable **once**.\n- A new code can be requested after **1 minute** (429 before that). Requesting one replaces the previous code.\n- **5 wrong attempts** delete the code; request a new one.\n- Codes for register, login and link are separate: a login code can't complete a registration."
   },
   "servers": [
@@ -208,7 +208,26 @@
                           "truecaller": false,
                           "passkeys": []
                         },
-                        "created_at": "2026-11-13T19:23:28.942Z"
+                        "created_at": "2026-11-13T19:23:28.942Z",
+                        "connections": {
+                          "youtube": false,
+                          "roblox": false,
+                          "instagram": false,
+                          "x": false,
+                          "spotify": false,
+                          "github": false,
+                          "riot_games": false,
+                          "linkedin": false,
+                          "reddit": false,
+                          "playstation": false,
+                          "custom_domain": false,
+                          "crunchyroll": false,
+                          "amazon_prime": false,
+                          "xbox": false,
+                          "paypal": false,
+                          "steam": false,
+                          "epic_games": false
+                        }
                       }
                     }
                   }
@@ -499,7 +518,26 @@
                           "truecaller": false,
                           "passkeys": []
                         },
-                        "created_at": "2026-11-13T19:23:28.942Z"
+                        "created_at": "2026-11-13T19:23:28.942Z",
+                        "connections": {
+                          "youtube": false,
+                          "roblox": false,
+                          "instagram": false,
+                          "x": false,
+                          "spotify": false,
+                          "github": false,
+                          "riot_games": false,
+                          "linkedin": false,
+                          "reddit": false,
+                          "playstation": false,
+                          "custom_domain": false,
+                          "crunchyroll": false,
+                          "amazon_prime": false,
+                          "xbox": false,
+                          "paypal": false,
+                          "steam": false,
+                          "epic_games": false
+                        }
                       }
                     }
                   }
@@ -713,7 +751,26 @@
                           "truecaller": false,
                           "passkeys": []
                         },
-                        "created_at": "2026-11-13T19:23:28.942Z"
+                        "created_at": "2026-11-13T19:23:28.942Z",
+                        "connections": {
+                          "youtube": false,
+                          "roblox": false,
+                          "instagram": false,
+                          "x": false,
+                          "spotify": false,
+                          "github": false,
+                          "riot_games": false,
+                          "linkedin": false,
+                          "reddit": false,
+                          "playstation": false,
+                          "custom_domain": false,
+                          "crunchyroll": false,
+                          "amazon_prime": false,
+                          "xbox": false,
+                          "paypal": false,
+                          "steam": false,
+                          "epic_games": false
+                        }
                       }
                     }
                   }
@@ -940,7 +997,26 @@
                           "cGFzc2tleS0x"
                         ]
                       },
-                      "created_at": "2026-11-13T19:23:28.942Z"
+                      "created_at": "2026-11-13T19:23:28.942Z",
+                      "connections": {
+                        "youtube": false,
+                        "roblox": false,
+                        "instagram": false,
+                        "x": false,
+                        "spotify": false,
+                        "github": false,
+                        "riot_games": false,
+                        "linkedin": false,
+                        "reddit": false,
+                        "playstation": false,
+                        "custom_domain": false,
+                        "crunchyroll": false,
+                        "amazon_prime": false,
+                        "xbox": false,
+                        "paypal": false,
+                        "steam": false,
+                        "epic_games": false
+                      }
                     }
                   }
                 }
@@ -1088,7 +1164,26 @@
                           "cGFzc2tleS0x"
                         ]
                       },
-                      "created_at": "2026-11-13T19:23:28.942Z"
+                      "created_at": "2026-11-13T19:23:28.942Z",
+                      "connections": {
+                        "youtube": false,
+                        "roblox": false,
+                        "instagram": false,
+                        "x": false,
+                        "spotify": false,
+                        "github": false,
+                        "riot_games": false,
+                        "linkedin": false,
+                        "reddit": false,
+                        "playstation": false,
+                        "custom_domain": false,
+                        "crunchyroll": false,
+                        "amazon_prime": false,
+                        "xbox": false,
+                        "paypal": false,
+                        "steam": false,
+                        "epic_games": false
+                      }
                     }
                   }
                 }
@@ -1274,7 +1369,26 @@
                             "cGFzc2tleS0x"
                           ]
                         },
-                        "created_at": "2026-11-13T19:23:28.942Z"
+                        "created_at": "2026-11-13T19:23:28.942Z",
+                        "connections": {
+                          "youtube": false,
+                          "roblox": false,
+                          "instagram": false,
+                          "x": false,
+                          "spotify": false,
+                          "github": false,
+                          "riot_games": false,
+                          "linkedin": false,
+                          "reddit": false,
+                          "playstation": false,
+                          "custom_domain": false,
+                          "crunchyroll": false,
+                          "amazon_prime": false,
+                          "xbox": false,
+                          "paypal": false,
+                          "steam": false,
+                          "epic_games": false
+                        }
                       }
                     }
                   }
@@ -1512,7 +1626,26 @@
                           "cGFzc2tleS0x"
                         ]
                       },
-                      "created_at": "2026-11-13T19:23:28.942Z"
+                      "created_at": "2026-11-13T19:23:28.942Z",
+                      "connections": {
+                        "youtube": false,
+                        "roblox": false,
+                        "instagram": false,
+                        "x": false,
+                        "spotify": false,
+                        "github": false,
+                        "riot_games": false,
+                        "linkedin": false,
+                        "reddit": false,
+                        "playstation": false,
+                        "custom_domain": false,
+                        "crunchyroll": false,
+                        "amazon_prime": false,
+                        "xbox": false,
+                        "paypal": false,
+                        "steam": false,
+                        "epic_games": false
+                      }
                     }
                   }
                 }
@@ -1665,7 +1798,26 @@
                           "cGFzc2tleS0x"
                         ]
                       },
-                      "created_at": "2026-11-13T19:23:28.942Z"
+                      "created_at": "2026-11-13T19:23:28.942Z",
+                      "connections": {
+                        "youtube": false,
+                        "roblox": false,
+                        "instagram": false,
+                        "x": false,
+                        "spotify": false,
+                        "github": false,
+                        "riot_games": false,
+                        "linkedin": false,
+                        "reddit": false,
+                        "playstation": false,
+                        "custom_domain": false,
+                        "crunchyroll": false,
+                        "amazon_prime": false,
+                        "xbox": false,
+                        "paypal": false,
+                        "steam": false,
+                        "epic_games": false
+                      }
                     }
                   }
                 }
@@ -1798,7 +1950,26 @@
                           "cGFzc2tleS0x"
                         ]
                       },
-                      "created_at": "2026-11-13T19:23:28.942Z"
+                      "created_at": "2026-11-13T19:23:28.942Z",
+                      "connections": {
+                        "youtube": false,
+                        "roblox": false,
+                        "instagram": false,
+                        "x": false,
+                        "spotify": false,
+                        "github": false,
+                        "riot_games": false,
+                        "linkedin": false,
+                        "reddit": false,
+                        "playstation": false,
+                        "custom_domain": false,
+                        "crunchyroll": false,
+                        "amazon_prime": false,
+                        "xbox": false,
+                        "paypal": false,
+                        "steam": false,
+                        "epic_games": false
+                      }
                     }
                   }
                 }
@@ -2245,7 +2416,7 @@
             "webhookSignature": []
           }
         ],
-        "description": "Called by the OAuth service, not by apps.\n\nSigned with a shared secret (`WEBHOOKS_OAUTH_SECRET`):\n\n```\nX-Webhook-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, \"<t>.<raw body>\")>\n```\n\nThe timestamp must be within 5 minutes of the server clock. Sign the exact bytes you send.\n\n**Retries:** any 2xx means done, don't retry. Retry on 5xx or network errors with the same event `id`; duplicates are ignored. Events can arrive out of order; `occurred_at` decides which one wins.\n\nThe endpoint is not rate limited per IP. It returns 503 until the secret is configured.",
+        "description": "Called by the OAuth service, not by apps.\n\nSigned with a shared secret (`OAUTH_SERVICE_SECRET`):\n\n```\nX-Webhook-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, \"<t>.<raw body>\")>\n```\n\nThe timestamp must be within 5 minutes of the server clock. Sign the exact bytes you send.\n\n**Retries:** any 2xx means done, don't retry. Retry on 5xx or network errors with the same event `id`; duplicates are ignored. Events can arrive out of order; `occurred_at` decides which one wins.\n\nThe endpoint is not rate limited per IP. It returns 503 until the secret is configured.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2482,7 +2653,7 @@
             "bearerAuth": []
           }
         ],
-        "description": "Every provider in display order with a `connected` true/false flag. Connected providers include the account profile received from the OAuth service.",
+        "description": "Every provider in display order with a `connected` flag. Connected providers include the account profile received from the OAuth service. For just the true/false flags, use `connections` on any user response.",
         "responses": {
           "200": {
             "description": "All 17 providers",
@@ -2575,6 +2746,396 @@
                     "summary": "too many requests, slow down",
                     "value": {
                       "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/users/me/connections/{provider}": {
+      "parameters": [
+        {
+          "name": "provider",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Provider"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "One connection",
+        "operationId": "getConnection",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The connection (connected false if never connected)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                },
+                "examples": {
+                  "connected": {
+                    "value": {
+                      "provider": "spotify",
+                      "connected": true,
+                      "account": {
+                        "id": "sp_123",
+                        "username": "zoe",
+                        "display_name": "Zoë",
+                        "avatar_url": "https://i.scdn.co/a.png",
+                        "profile_url": "https://open.spotify.com/user/sp_123"
+                      },
+                      "connected_at": "2026-11-13T19:31:07Z",
+                      "updated_at": "2026-11-13T20:01:07Z"
+                    }
+                  },
+                  "not_connected": {
+                    "value": {
+                      "provider": "youtube",
+                      "connected": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "unknown provider",
+                    "value": {
+                      "error": "unknown provider"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Start connecting a provider",
+        "operationId": "connectProvider",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Returns a `connect_url` on the OAuth service. The user finishes the provider's OAuth there. The OAuth service then sends a `connection.connected` webhook, after which this connection and the profile flag show `connected: true`.\n\nContract for the OAuth service: the URL is `{OAUTH_SERVICE_BASE_URL}/v1/connect/{provider}?token=<JWT>`. The JWT is HS256 signed with the shared secret, with `iss=core-backend`, `aud=oauth-service`, `sub=<user id>`, a `provider` claim and a 10-minute `exp`. Use `sub` as `user_id` in webhooks.",
+        "responses": {
+          "200": {
+            "description": "Link to open",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectLink"
+                },
+                "examples": {
+                  "link": {
+                    "value": {
+                      "provider": "spotify",
+                      "connect_url": "https://oauth.example.com/v1/connect/spotify?token=eyJhbGciOiJIUzI1NiIs…",
+                      "expires_at": "2026-11-13T20:40:00Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown provider",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "unknown provider",
+                    "value": {
+                      "error": "unknown provider"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "this provider is already connected; disconnect it first",
+                    "value": {
+                      "error": "this provider is already connected; disconnect it first"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "OAuth service not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "connections are not configured",
+                    "value": {
+                      "error": "connections are not configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Disconnect a provider",
+        "operationId": "disconnectProvider",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Asks the OAuth service to revoke its tokens, then removes the stored account and sets the flag to false. If the OAuth service doesn't confirm, nothing changes here (502), so a later webhook can't silently reconnect it.\n\nContract for the OAuth service: `POST {OAUTH_SERVICE_BASE_URL}/v1/connections/revoke` with body `{\"user_id\",\"provider\",\"requested_at\"}` and an `X-Webhook-Signature` header (same scheme as the webhook). Reply 2xx, or 404 if nothing is held.",
+        "responses": {
+          "200": {
+            "description": "Disconnected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connection"
+                },
+                "examples": {
+                  "disconnected": {
+                    "value": {
+                      "provider": "spotify",
+                      "connected": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown provider, or not connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "unknown provider",
+                    "value": {
+                      "error": "unknown provider"
+                    }
+                  },
+                  "e1": {
+                    "summary": "this provider is not connected",
+                    "value": {
+                      "error": "this provider is not connected"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "OAuth service failed; nothing was changed, try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "could not reach the connections service, try again",
+                    "value": {
+                      "error": "could not reach the connections service, try again"
+                    }
+                  },
+                  "e1": {
+                    "summary": "connections service refused to disconnect (status 500), try again",
+                    "value": {
+                      "error": "connections service refused to disconnect (status 500), try again"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "OAuth service not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "connections are not configured",
+                    "value": {
+                      "error": "connections are not configured"
                     }
                   }
                 }
@@ -2893,7 +3454,8 @@
           "profile_complete",
           "two_factor_enabled",
           "sign_in_methods",
-          "created_at"
+          "created_at",
+          "connections"
         ],
         "properties": {
           "id": {
@@ -2942,6 +3504,9 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "connections": {
+            "$ref": "#/components/schemas/ConnectionFlags"
           }
         }
       },
@@ -3118,6 +3683,58 @@
             "description": "applied: stored. duplicate: event id already processed. stale: a newer event for this user and provider is already stored. ignored_unknown_user: no such user."
           }
         }
+      },
+      "ConnectionFlags": {
+        "type": "object",
+        "description": "Every provider mapped to whether it is connected. Always contains all providers.",
+        "propertyNames": {
+          "$ref": "#/components/schemas/Provider"
+        },
+        "additionalProperties": {
+          "type": "boolean"
+        },
+        "example": {
+          "youtube": false,
+          "roblox": false,
+          "instagram": false,
+          "x": false,
+          "spotify": true,
+          "github": false,
+          "riot_games": false,
+          "linkedin": false,
+          "reddit": false,
+          "playstation": false,
+          "custom_domain": false,
+          "crunchyroll": false,
+          "amazon_prime": false,
+          "xbox": false,
+          "paypal": false,
+          "steam": true,
+          "epic_games": false
+        }
+      },
+      "ConnectLink": {
+        "type": "object",
+        "required": [
+          "provider",
+          "connect_url",
+          "expires_at"
+        ],
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/Provider"
+          },
+          "connect_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Open this in a browser or in-app browser. It carries a signed token that tells the OAuth service who is connecting."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The link stops working after this (10 minutes)"
+          }
+        }
       }
     }
   },
@@ -3134,7 +3751,7 @@
             "webhookSignature": []
           }
         ],
-        "description": "Called by the OAuth service, not by apps.\n\nSigned with a shared secret (`WEBHOOKS_OAUTH_SECRET`):\n\n```\nX-Webhook-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, \"<t>.<raw body>\")>\n```\n\nThe timestamp must be within 5 minutes of the server clock. Sign the exact bytes you send.\n\n**Retries:** any 2xx means done, don't retry. Retry on 5xx or network errors with the same event `id`; duplicates are ignored. Events can arrive out of order; `occurred_at` decides which one wins.\n\nThe endpoint is not rate limited per IP. It returns 503 until the secret is configured.",
+        "description": "Called by the OAuth service, not by apps.\n\nSigned with a shared secret (`OAUTH_SERVICE_SECRET`):\n\n```\nX-Webhook-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, \"<t>.<raw body>\")>\n```\n\nThe timestamp must be within 5 minutes of the server clock. Sign the exact bytes you send.\n\n**Retries:** any 2xx means done, don't retry. Retry on 5xx or network errors with the same event `id`; duplicates are ignored. Events can arrive out of order; `occurred_at` decides which one wins.\n\nThe endpoint is not rate limited per IP. It returns 503 until the secret is configured.",
         "requestBody": {
           "required": true,
           "content": {
