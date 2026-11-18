@@ -70,11 +70,11 @@ Full reference: [`docs/openapi.json`](docs/openapi.json).
 | `POST` | `/v1/auth/2fa/verify` | MFA token |
 | `POST` / `DELETE` | `/v1/auth/link` | Bearer |
 | `POST` | `/v1/auth/2fa/setup`, `/enable`, `/disable` | Bearer |
-| `GET` | `/v1/users/me` | Bearer |
-| `PUT` | `/v1/users/me/profile` | Bearer |
-| `PUT` / `DELETE` | `/v1/users/me/avatar` | Bearer |
-| `GET` | `/v1/users/me/connections`, `/v1/users/me/connections/{provider}` | Bearer |
-| `POST` / `DELETE` | `/v1/users/me/connections/{provider}` | Bearer |
+| `GET` | `/v1/users/@me` | Bearer |
+| `PUT` | `/v1/users/@me/profile` | Bearer |
+| `PUT` / `DELETE` | `/v1/users/@me/avatar` | Bearer |
+| `GET` | `/v1/users/@me/connections`, `/v1/users/@me/connections/{provider}` | Bearer |
+| `POST` / `DELETE` | `/v1/users/@me/connections/{provider}` | Bearer |
 | `GET` | `/v1/usernames/suggestions`, `/v1/usernames/availability` | Bearer |
 | `POST` | `/v1/webhooks/oauth` | HMAC signature |
 | `GET` | `/.well-known/assetlinks.json`, `/.well-known/apple-app-site-association` | – |
@@ -85,13 +85,13 @@ Auth routes have a stricter rate limit than the rest; the webhook is exempt.
 
 1. `POST /v1/auth/register` or `/v1/auth/login` with `method` set to `email`, `passkey` or `truecaller`.
 2. If 2FA is enabled, the response carries an `mfa_token`; finish with `POST /v1/auth/2fa/verify`.
-3. If `user.profile_complete` is `false`, collect name, username and date of birth via `PUT /v1/users/me/profile`.
+3. If `user.profile_complete` is `false`, collect name, username and date of birth via `PUT /v1/users/@me/profile`.
 
 Signed-in users can attach or remove extra sign-in methods with `POST` / `DELETE /v1/auth/link`.
 
 ### Profile pictures
 
-`PUT /v1/users/me/avatar` takes `multipart/form-data` with an `avatar` file (JPEG, PNG, WebP or GIF, max 5 MB). The image
+`PUT /v1/users/@me/avatar` takes `multipart/form-data` with an `avatar` file (JPEG, PNG, WebP or GIF, max 5 MB). The image
 is cropped square, resized to 512 px and re-encoded (dropping EXIF), then uploaded to R2 through `STORAGE_ENDPOINT`.
 The stored `profile.avatar_url` uses `STORAGE_PUBLIC_URL`, so images are served from the public domain, not the API
 endpoint. Each upload gets a new key under `avatars/<user id>/`; the old file is deleted. `DELETE` removes it.
@@ -108,10 +108,10 @@ Every user response includes `connections`, a `provider → true/false` map of a
 
 | Action | Call | What happens |
 |---|---|---|
-| List | `GET /v1/users/me/connections` | Every provider with `connected` and, if connected, the account profile |
-| View one | `GET /v1/users/me/connections/{provider}` | Same, for one provider |
-| Connect | `POST /v1/users/me/connections/{provider}` | Returns a `connect_url` to open; the OAuth service finishes and sends a webhook |
-| Disconnect | `DELETE /v1/users/me/connections/{provider}` | Asks the OAuth service to revoke tokens, then clears the account here |
+| List | `GET /v1/users/@me/connections` | Every provider with `connected` and, if connected, the account profile |
+| View one | `GET /v1/users/@me/connections/{provider}` | Same, for one provider |
+| Connect | `POST /v1/users/@me/connections/{provider}` | Returns a `connect_url` to open; the OAuth service finishes and sends a webhook |
+| Disconnect | `DELETE /v1/users/@me/connections/{provider}` | Asks the OAuth service to revoke tokens, then clears the account here |
 
 Contract with the OAuth service (all signed with `OAUTH_SERVICE_SECRET`):
 

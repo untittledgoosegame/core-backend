@@ -1757,7 +1757,7 @@
         }
       }
     },
-    "/v1/users/me": {
+    "/v1/users/@me": {
       "get": {
         "tags": [
           "profile"
@@ -1887,7 +1887,7 @@
         }
       }
     },
-    "/v1/users/me/profile": {
+    "/v1/users/@me/profile": {
       "put": {
         "tags": [
           "profile"
@@ -2635,7 +2635,7 @@
         }
       }
     },
-    "/v1/users/me/connections": {
+    "/v1/users/@me/connections": {
       "get": {
         "tags": [
           "connections"
@@ -2749,7 +2749,7 @@
         }
       }
     },
-    "/v1/users/me/connections/{provider}": {
+    "/v1/users/@me/connections/{provider}": {
       "parameters": [
         {
           "name": "provider",
@@ -3139,7 +3139,7 @@
         }
       }
     },
-    "/v1/users/me/avatar": {
+    "/v1/users/@me/avatar": {
       "put": {
         "tags": [
           "profile"
@@ -3734,7 +3734,7 @@
             "maxLength": 160
           }
         },
-        "description": "Profile fields to save. The picture is managed with `PUT`/`DELETE /v1/users/me/avatar`; sending `avatar_url` here is rejected."
+        "description": "Profile fields to save. The picture is managed with `PUT`/`DELETE /v1/users/@me/avatar`; sending `avatar_url` here is rejected."
       },
       "Profile": {
         "type": "object",
