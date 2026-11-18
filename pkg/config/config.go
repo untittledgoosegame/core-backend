@@ -12,6 +12,7 @@ import (
 
 	"github.com/untittledgoosegame/core-backend/pkg/cache"
 	"github.com/untittledgoosegame/core-backend/pkg/logger"
+	"github.com/untittledgoosegame/core-backend/pkg/storage"
 )
 
 type Config struct {
@@ -21,6 +22,7 @@ type Config struct {
 	Server       ServerConfig       `mapstructure:"server"`
 	Mongo        MongoConfig        `mapstructure:"mongo"`
 	Redis        cache.Config       `mapstructure:"redis"`
+	Storage      storage.Config     `mapstructure:"storage"`
 	JWT          JWTConfig          `mapstructure:"jwt"`
 	WebAuthn     WebAuthnConfig     `mapstructure:"webauthn"`
 	Truecaller   TruecallerConfig   `mapstructure:"truecaller"`
@@ -119,6 +121,13 @@ func LoadConfig() error {
 	viper.SetDefault("redis.url", "localhost:6379")
 	viper.SetDefault("redis.password", "")
 	viper.SetDefault("redis.db", 0)
+	viper.SetDefault("storage.endpoint", "")
+	viper.SetDefault("storage.region", "auto")
+	viper.SetDefault("storage.bucket", "")
+	viper.SetDefault("storage.access_key", "")
+	viper.SetDefault("storage.secret_key", "")
+	viper.SetDefault("storage.use_ssl", true)
+	viper.SetDefault("storage.public_url", "")
 	viper.SetDefault("jwt.secret", "")
 	viper.SetDefault("jwt.ttl", "720h")
 	viper.SetDefault("webauthn.rp_id", "localhost")

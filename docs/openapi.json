@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Core Backend API",
-    "version": "0.6.0",
+    "version": "0.7.0",
     "description": "Sign-in flow: **register or login** (email code, passkey or Truecaller) → optional **2FA** → **profile setup**.\n\n- All bodies are JSON; unknown fields are rejected (400).\n- Errors are `{\"error\": \"message\"}` with a matching HTTP status.\n- Authenticated routes need `Authorization: Bearer <token>` from a `Session`.\n- `POST /v1/webhooks/oauth` is server-to-server, HMAC-signed and not rate limited.\n- Rate limits per client IP: 120 requests/minute overall, 10/minute on register, login, 2FA verify/enable/disable and link. Exceeding them returns 429.\n\n### Email codes\n- 6 digits, valid for **10 minutes**, usable **once**.\n- A new code can be requested after **1 minute** (429 before that). Requesting one replaces the previous code.\n- **5 wrong attempts** delete the code; request a new one.\n- Codes for register, login and link are separate: a login code can't complete a registration."
   },
   "servers": [
@@ -1899,7 +1899,7 @@
             "bearerAuth": []
           }
         ],
-        "description": "Replaces the whole profile. `name`, `username` and `dob` are required; `avatar_url` and `bio` are optional. Users must be at least 13. Username is lowercased before saving.",
+        "description": "Sets name, username, date of birth and bio. Other profile fields, including the picture, are left as they are. Users must be at least 13. Username is lowercased before saving.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2012,12 +2012,6 @@
                     "summary": "bio must be at most 160 characters",
                     "value": {
                       "error": "bio must be at most 160 characters"
-                    }
-                  },
-                  "e5": {
-                    "summary": "avatar_url must be an https URL",
-                    "value": {
-                      "error": "avatar_url must be an https URL"
                     }
                   }
                 }
@@ -3144,6 +3138,334 @@
           }
         }
       }
+    },
+    "/v1/users/me/avatar": {
+      "put": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Upload a profile picture",
+        "operationId": "uploadAvatar",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Send `multipart/form-data` with the image in an `avatar` field. JPEG, PNG, WebP or GIF up to 5 MB (and 40 megapixels).\n\nThe server centre-crops it square, resizes it to at most 512×512 and re-encodes it (JPEG stays JPEG, everything else becomes PNG), which removes EXIF data such as location. It is stored in Cloudflare R2 and the returned `profile.avatar_url` points at the public images domain. Each upload gets a new URL; the previous picture is deleted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "avatar"
+                ],
+                "properties": {
+                  "avatar": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "examples": {
+                  "user": {
+                    "value": {
+                      "id": "6af77871dde0ef2f4fa0955e",
+                      "email": "pic@example.com",
+                      "profile": {
+                        "name": "Pic Goose",
+                        "username": "picgoose",
+                        "dob": "2000-01-01",
+                        "bio": "honk",
+                        "avatar_url": "https://images.example.com/avatars/6af77871dde0ef2f4fa0955e/5d2e4cf2e153189f.jpg"
+                      },
+                      "profile_complete": true,
+                      "two_factor_enabled": false,
+                      "sign_in_methods": {
+                        "email": true,
+                        "truecaller": false,
+                        "passkeys": []
+                      },
+                      "connections": {
+                        "youtube": false,
+                        "roblox": false,
+                        "instagram": false,
+                        "x": false,
+                        "spotify": false,
+                        "github": false,
+                        "riot_games": false,
+                        "linkedin": false,
+                        "reddit": false,
+                        "playstation": false,
+                        "custom_domain": false,
+                        "crunchyroll": false,
+                        "amazon_prime": false,
+                        "xbox": false,
+                        "paypal": false,
+                        "steam": false,
+                        "epic_games": false
+                      },
+                      "created_at": "2026-11-13T20:52:01Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a usable image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "avatar must be a JPEG, PNG, WebP or GIF image",
+                    "value": {
+                      "error": "avatar must be a JPEG, PNG, WebP or GIF image"
+                    }
+                  },
+                  "e1": {
+                    "summary": "avatar dimensions are too large",
+                    "value": {
+                      "error": "avatar dimensions are too large"
+                    }
+                  },
+                  "e2": {
+                    "summary": "missing \"avatar\" file",
+                    "value": {
+                      "error": "missing \"avatar\" file"
+                    }
+                  },
+                  "e3": {
+                    "summary": "expected multipart/form-data with an \"avatar\" file",
+                    "value": {
+                      "error": "expected multipart/form-data with an \"avatar\" file"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "avatar must be at most 5 MB",
+                    "value": {
+                      "error": "avatar must be at most 5 MB"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Image storage not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "image uploads are not configured",
+                    "value": {
+                      "error": "image uploads are not configured"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Remove the profile picture",
+        "operationId": "deleteAvatar",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Clears `profile.avatar_url` and deletes the uploaded file. Also clears a picture that came from Truecaller.",
+        "responses": {
+          "200": {
+            "description": "Updated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                },
+                "examples": {
+                  "user": {
+                    "value": {
+                      "id": "6af77871dde0ef2f4fa0955e",
+                      "email": "pic@example.com",
+                      "profile": {
+                        "name": "Pic Goose",
+                        "username": "picgoose",
+                        "dob": "2000-01-01",
+                        "bio": "honk"
+                      },
+                      "profile_complete": true,
+                      "two_factor_enabled": false,
+                      "sign_in_methods": {
+                        "email": true,
+                        "truecaller": false,
+                        "passkeys": []
+                      },
+                      "connections": {
+                        "youtube": false,
+                        "roblox": false,
+                        "instagram": false,
+                        "x": false,
+                        "spotify": false,
+                        "github": false,
+                        "riot_games": false,
+                        "linkedin": false,
+                        "reddit": false,
+                        "playstation": false,
+                        "custom_domain": false,
+                        "crunchyroll": false,
+                        "amazon_prime": false,
+                        "xbox": false,
+                        "paypal": false,
+                        "steam": false,
+                        "epic_games": false
+                      },
+                      "created_at": "2026-11-13T20:52:01Z"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "missing bearer token",
+                    "value": {
+                      "error": "missing bearer token"
+                    }
+                  },
+                  "e1": {
+                    "summary": "invalid or expired token",
+                    "value": {
+                      "error": "invalid or expired token"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No picture",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "no profile picture to remove",
+                    "value": {
+                      "error": "no profile picture to remove"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited (per IP)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "e0": {
+                    "summary": "too many requests, slow down",
+                    "value": {
+                      "error": "too many requests, slow down"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3407,17 +3729,12 @@
             "format": "date",
             "description": "YYYY-MM-DD; at least 13 years ago"
           },
-          "avatar_url": {
-            "type": "string",
-            "format": "uri",
-            "description": "https only"
-          },
           "bio": {
             "type": "string",
             "maxLength": 160
           }
         },
-        "description": "Profile to save. All rules are enforced; violations return 400."
+        "description": "Profile fields to save. The picture is managed with `PUT`/`DELETE /v1/users/me/avatar`; sending `avatar_url` here is rejected."
       },
       "Profile": {
         "type": "object",
@@ -3439,7 +3756,9 @@
             "description": "YYYY-MM-DD, or empty"
           },
           "avatar_url": {
-            "type": "string"
+            "type": "string",
+            "format": "uri",
+            "description": "Public image URL on the images domain (STORAGE_PUBLIC_URL), or the Truecaller photo. Absent when there is no picture."
           },
           "bio": {
             "type": "string"

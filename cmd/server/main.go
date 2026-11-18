@@ -22,6 +22,7 @@ import (
 	"github.com/untittledgoosegame/core-backend/pkg/database"
 	"github.com/untittledgoosegame/core-backend/pkg/logger"
 	"github.com/untittledgoosegame/core-backend/pkg/mailer"
+	"github.com/untittledgoosegame/core-backend/pkg/storage"
 )
 
 func main() {
@@ -52,6 +53,14 @@ func main() {
 		log.Fatalf("Failed to create user indexes: %v", err)
 	}
 
+	files, err := storage.New(ctx, cfg.Storage)
+	if err != nil {
+		log.Fatalf("Failed to connect to object storage: %v", err)
+	}
+	if files == nil {
+		log.Warn("object storage not configured, avatar uploads are disabled")
+	}
+
 	connectionStore := connection.NewStore(db)
 	if err := connectionStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("Failed to create connection indexes: %v", err)
@@ -68,6 +77,7 @@ func main() {
 		DB:          db,
 		Redis:       rdb,
 		Users:       users,
+		Avatars:     user.NewAvatars(users, files),
 		Connections: connections,
 		Auth:        authService,
 		Config:      cfg,

@@ -47,6 +47,7 @@ then built-in defaults. `.env.example` lists every option.
 | `SERVER_HOST`, `SERVER_PORT`, `SERVER_TRUSTED_PROXIES` | Listen address; proxy CIDRs whose `X-Forwarded-For` is trusted |
 | `MONGO_URI`, `MONGO_DATABASE` | MongoDB |
 | `REDIS_URL`, `REDIS_PASSWORD`, `REDIS_DB` | Redis (email codes) |
+| `STORAGE_*` | Image uploads to Cloudflare R2: `STORAGE_ENDPOINT` is the S3 API (`<account_id>.r2.cloudflarestorage.com`) used to upload, `STORAGE_PUBLIC_URL` is the separate domain images are served from. Empty endpoint disables uploads |
 | `JWT_SECRET`, `JWT_TTL` | Session tokens |
 | `SECURITY_ENCRYPTION_KEY` | Encrypts 2FA secrets at rest (`openssl rand -base64 32`) |
 | `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_ORIGINS` | Passkey relying party |
@@ -71,6 +72,7 @@ Full reference: [`docs/openapi.json`](docs/openapi.json).
 | `POST` | `/v1/auth/2fa/setup`, `/enable`, `/disable` | Bearer |
 | `GET` | `/v1/users/me` | Bearer |
 | `PUT` | `/v1/users/me/profile` | Bearer |
+| `PUT` / `DELETE` | `/v1/users/me/avatar` | Bearer |
 | `GET` | `/v1/users/me/connections`, `/v1/users/me/connections/{provider}` | Bearer |
 | `POST` / `DELETE` | `/v1/users/me/connections/{provider}` | Bearer |
 | `GET` | `/v1/usernames/suggestions`, `/v1/usernames/availability` | Bearer |
@@ -86,6 +88,16 @@ Auth routes have a stricter rate limit than the rest; the webhook is exempt.
 3. If `user.profile_complete` is `false`, collect name, username and date of birth via `PUT /v1/users/me/profile`.
 
 Signed-in users can attach or remove extra sign-in methods with `POST` / `DELETE /v1/auth/link`.
+
+### Profile pictures
+
+`PUT /v1/users/me/avatar` takes `multipart/form-data` with an `avatar` file (JPEG, PNG, WebP or GIF, max 5 MB). The image
+is cropped square, resized to 512 px and re-encoded (dropping EXIF), then uploaded to R2 through `STORAGE_ENDPOINT`.
+The stored `profile.avatar_url` uses `STORAGE_PUBLIC_URL`, so images are served from the public domain, not the API
+endpoint. Each upload gets a new key under `avatars/<user id>/`; the old file is deleted. `DELETE` removes it.
+
+For R2: create an API token with Object Read & Write on the bucket, enable public access (custom domain or r2.dev),
+and set `STORAGE_REGION=auto`, `STORAGE_USE_SSL=true`. Locally, `make db-up` runs s3mock on `:9090` as a stand-in.
 
 ### Connections
 
@@ -132,10 +144,10 @@ internal/
   connection/        third-party connections: service, OAuth service client, webhook events
   server/            HTTP server and graceful shutdown
 pkg/                 app-agnostic helpers: config, logger, database, cache,
-                     mailer, apperr, httpx, secret, webhook
+                     mailer, apperr, httpx, secret, webhook, storage
 templates/           email templates, embedded in the binary
 docs/                OpenAPI spec
-docker/              local MongoDB and Redis
+docker/              local MongoDB, Redis, Mailpit and an S3 stand-in for R2
 ```
 
 Dependencies flow one way: `cmd` → `internal/api` → `internal/*` → `pkg`.

@@ -28,6 +28,27 @@ services:
       timeout: 5s
       retries: 5
 
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # Local stand-in for Cloudflare R2: S3 API on :9090, objects publicly readable like a public R2 bucket.
+  s3:
+    image: adobe/s3mock:4.7.0
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: goose-images
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /data
+    volumes:
+      - s3-data:/data
+
 volumes:
   mongo-data:
-  redis:
+  redis-data:
+  s3-data:
